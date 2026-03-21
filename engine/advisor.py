@@ -94,10 +94,12 @@ class AdvisorResult:
         self.actions: List[ActionRecommendation] = []
         self.top_action: Optional[ActionRecommendation] = None
         self.best_hand_cards: List[dict] = []  # The 5 cards making the best hand
+        self.adjusted_equity: Optional[float] = None  # Equity discounted for opponent betting strength
 
     def to_dict(self) -> dict:
         return {
             "equity": self.equity.to_dict() if self.equity else None,
+            "adjusted_equity": round(self.adjusted_equity, 1) if self.adjusted_equity is not None else None,
             "hand_name": self.hand_name,
             "hand_rank": self.hand_rank,
             "draw_description": self.draw_description,
@@ -229,8 +231,46 @@ class Advisor:
         )
 
         # --- Action recommendations ---
+        # When facing a bet, discount equity: opponent is NOT holding random cards.
+        # The larger the bet and the later the street, the stronger their likely hand.
+        # BUT: when pot-committed (low SPR), reduce the discount — folding is rarely
+        # correct when you're getting extreme pot odds.
+        action_equity = win_pct
+        if to_call > 0 and len(community) > 0:
+            bet_fraction = to_call / max(pot - to_call, 1)  # Bet relative to pot before their bet
+            street_factor = len(community) / 5.0  # 0.6 on flop, 0.8 on turn, 1.0 on river
+
+            # River bets are the most reliable signal — opponent has seen all cards
+            if bet_fraction > 0.75:
+                discount = 0.70 * street_factor  # Big bet: heavy discount
+            elif bet_fraction > 0.4:
+                discount = 0.50 * street_factor  # Medium bet: moderate discount
+            elif bet_fraction > 0.2:
+                discount = 0.30 * street_factor  # Small bet: light discount
+            else:
+                discount = 0.15 * street_factor  # Min bet: minimal discount
+
+            # Reduce discount when pot-committed (low SPR)
+            # SPR < 1: nearly all-in, discount barely applies (you're getting huge odds)
+            # SPR 1-3: pot committed, halve the discount
+            # SPR > 3: full discount
+            if result.spr < 1:
+                discount *= 0.2  # Almost irrelevant — you're priced in
+            elif result.spr < 2:
+                discount *= 0.4
+            elif result.spr < 3:
+                discount *= 0.65
+
+            action_equity = win_pct * (1 - discount)
+            # Floor: never discount below pot odds (otherwise fold is always right)
+            action_equity = max(action_equity, result.pot_odds * 0.9)
+
+        # Store adjusted equity so UI can show the discount
+        if action_equity != win_pct:
+            result.adjusted_equity = action_equity
+
         result.actions = Advisor._rank_actions(
-            win_pct, result.pot_odds, result.equity_edge,
+            action_equity, result.pot_odds, action_equity - result.pot_odds,
             result.spr, result.fold_equity, result.implied_odds,
             result.position_modifier, pot, to_call, stack,
             valid_actions, num_opponents, has_community=len(community) > 0

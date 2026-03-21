@@ -194,7 +194,12 @@
                                 <span class="eq-label-loss" x-text="'Loss '+(advisor?.equity?.loss||0).toFixed(1)+'%'"></span>
                             </div>
                         </div>
-                        <!-- Best Hand: single line with colored cards + name -->
+                        <!-- Adjusted equity warning when facing a bet -->
+                        <div x-show="advisor?.adjusted_equity !== null && advisor?.adjusted_equity !== undefined"
+                             style="font-size:0.7rem;color:var(--orange-accent);padding:2px 0"
+                             title="Equity is computed vs random hands, but an opponent who bets likely has a stronger range. Recommendations use this adjusted figure.">
+                            Adj. equity vs bet: <span x-text="(advisor?.adjusted_equity||0).toFixed(1)+'%'"></span>
+                        </div>
                         <div x-show="advisor?.hand_name" style="padding:4px 0;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
                             <span style="font-size:0.75rem;color:var(--text-muted);flex-shrink:0">Best Hand</span>
                             <template x-for="bhc in (advisor?.best_hand_cards||[])" :key="'bh_'+bhc.short">
