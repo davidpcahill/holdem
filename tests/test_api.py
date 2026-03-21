@@ -333,6 +333,58 @@ def test_state_completeness():
             assert isinstance(a, dict), f'Action not dict: {type(a)}'
 
 
+def test_advisor_preflop():
+    """Advisor preflop should return hand name and equity."""
+    with app.test_client() as c:
+        api(c, 'POST', '/api/new_game', {
+            'small_blind': 5, 'big_blind': 10,
+            'players': [
+                {'name': 'A', 'stack': 1000, 'player_type': 'human'},
+                {'name': 'B', 'stack': 1000, 'player_type': 'human'},
+            ]
+        })
+        api(c, 'POST', '/api/new_hand')
+        s = api(c, 'GET', '/api/state')
+        seat = s['action_seat']
+        adv = api(c, 'POST', '/api/advisor', {'seat': seat})
+        assert adv.get('hand_rank') == 'PREFLOP'
+        assert adv.get('hand_name'), "Should have a hand name"
+        assert adv['equity']['is_preflop'] is True
+        assert len(adv['actions']) > 0
+        # Actions should include fold, check/call, and optionally raise
+        action_names = [a['action'] for a in adv['actions']]
+        assert 'fold' in action_names or 'call' in action_names or 'check' in action_names
+
+
+def test_advisor_postflop():
+    """Advisor on flop should return outs and pot odds."""
+    with app.test_client() as c:
+        api(c, 'POST', '/api/new_game', {
+            'small_blind': 5, 'big_blind': 10,
+            'players': [
+                {'name': 'A', 'stack': 1000, 'player_type': 'human'},
+                {'name': 'B', 'stack': 1000, 'player_type': 'human'},
+            ]
+        })
+        api(c, 'POST', '/api/new_hand')
+        s = api(c, 'GET', '/api/state')
+        seat = s['action_seat']
+        # Call and check to advance to flop
+        api(c, 'POST', '/api/action', {'seat': seat, 'action': 'call'})
+        s2 = api(c, 'GET', '/api/state')
+        seat2 = s2['action_seat']
+        api(c, 'POST', '/api/action', {'seat': seat2, 'action': 'check'})
+        # Now on flop
+        s3 = api(c, 'GET', '/api/state')
+        assert s3['street'] == 'flop'
+        seat3 = s3['action_seat']
+        adv = api(c, 'POST', '/api/advisor', {'seat': seat3})
+        assert adv.get('hand_rank') != 'PREFLOP', "Should not be preflop on flop"
+        assert 'outs' in adv
+        assert 'pot_odds' in adv
+        assert adv['equity']['is_preflop'] is False
+
+
 def test_undo_blocked_during_ai_turn():
     """Undo should be blocked when it's an AI player's turn."""
     with app.test_client() as c:

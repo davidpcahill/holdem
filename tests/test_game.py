@@ -538,6 +538,29 @@ def test_undo_hand_mid_hand_no_history_change():
     assert g.phase == GamePhase.BETWEEN_HANDS
 
 
+def test_min_raise_validation():
+    """Raise below minimum should return error."""
+    g = make_game(2, stack=1000, sb=5, bb=10)
+    g.new_hand()
+    seat = g.action_seat
+    # Min raise to = current_bet(10) + last_raise_size(10) = 20
+    result = g.process_action(seat, "raise", 15)  # Below min raise of 20
+    assert "error" in result, f"Should reject raise below min, got: {result}"
+
+
+def test_all_in_below_min_raise():
+    """All-in for less than min raise should be valid."""
+    g = GameState()
+    g.set_blinds(5, 10)
+    g.add_player("Short", stack=15)  # Can only raise to 15 (below min raise of 20)
+    g.add_player("Big", stack=1000)
+    g.new_hand()
+    seat = g.action_seat
+    # Short stack (seat 0 in heads-up is dealer/SB), try to go all-in for 15
+    result = g.process_action(seat, "raise", 15)
+    assert "error" not in result, f"All-in below min raise should be valid, got: {result}"
+
+
 def test_side_pot_chips_not_lost_when_eligible_fold():
     """When all eligible players for a side pot have folded, chips should carry forward."""
     # Scenario: 3 players. Player 0 goes all-in for 50. Player 1 raises to 100.
