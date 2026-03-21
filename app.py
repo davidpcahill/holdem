@@ -53,6 +53,17 @@ def _get_full_state(viewer_seat=None):
     return state
 
 
+def _push_advisor_async(seat: int):
+    """Compute and push advisor data in a background thread (outside _ai_lock)."""
+    def _do():
+        try:
+            advisor_data = _compute_advisor(seat)
+            socketio.emit("advisor_update", advisor_data)
+        except Exception:
+            socketio.emit("advisor_update", {"error": "failed"})
+    threading.Thread(target=_do, daemon=True).start()
+
+
 def _run_ai_turn():
     """
     Process AI player turns in sequence.
@@ -138,26 +149,26 @@ def _run_ai_turn():
                 "street_changed": street_changed,
             })
 
-            # If next player is human, push advisor as a separate event
-            # so the action appears instantly in the UI
-            if (game.phase == GamePhase.PLAYING
-                    and game.action_seat >= 0
-                    and game.action_seat < len(game.players)):
-                next_p = game.players[game.action_seat]
-                if next_p.player_type == PlayerType.HUMAN and next_p.hole_cards:
-                    try:
-                        advisor_data = _compute_advisor(next_p.seat)
-                        socketio.emit("advisor_update", advisor_data)
-                    except Exception:
-                        socketio.emit("advisor_update", {"error": "failed"})
-
             # If hand ended, stop (no separate state_update — ai_action already has it)
             if game.phase != GamePhase.PLAYING:
                 break
 
-            # Pause between AI actions for readability
-            # Longer pause when street changed so frontend can show the transition
-            time.sleep(0.8 if street_changed else 0.2)
+            # If next player is human, push advisor in a separate thread
+            # so we release _ai_lock immediately and don't block the UI
+            if (game.action_seat >= 0
+                    and game.action_seat < len(game.players)):
+                next_p = game.players[game.action_seat]
+                if next_p.player_type == PlayerType.HUMAN and next_p.hole_cards:
+                    _push_advisor_async(next_p.seat)
+                    break  # Human's turn — exit loop, next iteration would break anyway
+
+            # Pause between AI actions
+            # Use street_reveal_ms + buffer so frontend can animate the transition
+            if street_changed:
+                reveal_ms = settings.get('street_reveal_ms', 800)
+                time.sleep((reveal_ms / 1000.0) + 0.5)
+            else:
+                time.sleep(0.2)
 
 
 # ──────────────────────────────────────────────
