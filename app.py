@@ -119,12 +119,25 @@ def _run_ai_turn():
             result = game.process_action(player.seat, decision.action, decision.amount)
 
             # Emit action result
+            action_state = _get_full_state()
+
+            # If next player is human, piggyback advisor on this emit
+            if (game.phase == GamePhase.PLAYING
+                    and game.action_seat >= 0
+                    and game.action_seat < len(game.players)):
+                next_p = game.players[game.action_seat]
+                if next_p.player_type == PlayerType.HUMAN and next_p.hole_cards:
+                    try:
+                        action_state["_advisor"] = _compute_advisor(next_p.seat)
+                    except Exception:
+                        pass
+
             socketio.emit("ai_action", {
                 "seat": player.seat,
                 "name": player.name,
                 "decision": decision.to_dict(),
                 "result": result,
-                "state": _get_full_state(),
+                "state": action_state,
             })
 
             # If hand ended, stop
