@@ -133,6 +133,25 @@ document.addEventListener('alpine:init', () => {
             return ra?.max || (this.state.players?.[this.state.action_seat]?.stack || 100);
         },
 
+        get sliderStep() {
+            const range = this.raiseMax - this.raiseMin;
+            if (range < 100) return 1;
+            if (range < 500) return 5;
+            if (range < 2000) return 10;
+            if (range < 5000) return 25;
+            if (range < 20000) return 50;
+            if (range < 100000) return 100;
+            return 250;
+        },
+
+        snapBet(val) {
+            // Snap dragged value to clean increment, but keep min/max exact
+            if (val <= this.raiseMin) return this.raiseMin;
+            if (val >= this.raiseMax) return this.raiseMax;
+            const step = this.sliderStep;
+            return Math.round(val / step) * step;
+        },
+
         // ── Initialization ──
 
         init() {
@@ -376,7 +395,7 @@ document.addEventListener('alpine:init', () => {
 
         setBetPreset(mult) {
             const target = Math.round((this.state.pot || 0) * mult);
-            this.betAmount = Math.max(this.raiseMin, Math.min(target, this.raiseMax));
+            this.betAmount = this.snapBet(Math.max(this.raiseMin, Math.min(target, this.raiseMax)));
         },
 
         async saveSettings() {

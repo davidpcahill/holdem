@@ -406,7 +406,13 @@
                         <div x-show="advisorEnabled && advisor?.top_action?.bet_range" class="slider-recommend"
                              :style="sliderRecommendStyle()"
                              :title="'Recommended: $' + (advisor?.top_action?.bet_range?.[0]||'') + ' — $' + (advisor?.top_action?.bet_range?.[1]||'')"></div>
-                        <input type="range" :min="raiseMin" :max="raiseMax" x-model.number="betAmount" step="1" style="width:100%">
+                        <input type="range" :min="raiseMin" :max="raiseMax" x-model.number="betAmount"
+                               :step="sliderStep" style="width:100%"
+                               @keydown.left.prevent="betAmount = Math.max(raiseMin, betAmount - 1)"
+                               @keydown.right.prevent="betAmount = Math.min(raiseMax, betAmount + 1)"
+                               @keydown.down.prevent="betAmount = Math.max(raiseMin, betAmount - 1)"
+                               @keydown.up.prevent="betAmount = Math.min(raiseMax, betAmount + 1)"
+                               @input="betAmount = snapBet(betAmount)">
                     </div>
                     <div class="bet-amount-display" x-text="'$'+betAmount"></div>
                 </div>

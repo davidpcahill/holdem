@@ -252,22 +252,18 @@ class AIEngine:
     def _size_raise(self, raise_info: dict, pot: int, stack: int, bet_type: str) -> int:
         """
         Determine raise size based on bet type and randomness.
-        Returns the total raise-to amount.
+        Returns the total raise-to amount, rounded to a clean increment.
         """
         min_raise = raise_info.get("min", 0)
         max_raise = raise_info.get("max", stack)
 
         if bet_type == "value":
-            # 60-80% pot
             target = int(pot * (0.6 + self._rng.random() * 0.2))
         elif bet_type == "semi_bluff":
-            # 50-65% pot
             target = int(pot * (0.5 + self._rng.random() * 0.15))
         elif bet_type == "cbet":
-            # 40-60% pot
             target = int(pot * (0.4 + self._rng.random() * 0.2))
         elif bet_type == "bluff":
-            # 55-75% pot (larger to apply pressure)
             target = int(pot * (0.55 + self._rng.random() * 0.2))
         else:
             target = int(pot * 0.5)
@@ -279,7 +275,37 @@ class AIEngine:
         noise = int(target * self._rng.gauss(0, 0.05 * self.variance))
         target = max(min_raise, min(target + noise, max_raise))
 
+        # Round to clean increment (like a human would bet)
+        target = self._round_bet(target, min_raise, max_raise)
+
         return target
+
+    @staticmethod
+    def _round_bet(amount: int, min_bet: int, max_bet: int) -> int:
+        """
+        Round a bet to a clean human-like increment.
+        Small bets round to 5/10, medium to 25/50, large to 100/250.
+        Never rounds below min_bet or above max_bet.
+        All-in (amount >= max_bet * 0.9) snaps to exact max.
+        """
+        if amount >= max_bet * 0.9:
+            return max_bet  # Close enough to all-in — just shove
+
+        if amount < 50:
+            step = 5
+        elif amount < 200:
+            step = 10
+        elif amount < 500:
+            step = 25
+        elif amount < 2000:
+            step = 50
+        elif amount < 10000:
+            step = 100
+        else:
+            step = 250
+
+        rounded = round(amount / step) * step
+        return max(min_bet, min(rounded, max_bet))
 
     def calculate_think_time(self, player: Player) -> float:
         """
