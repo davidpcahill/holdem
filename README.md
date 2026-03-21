@@ -11,7 +11,7 @@ A local web-based Texas Hold'em game with AI opponents and a real-time strategy 
 
 Built with Python/Flask backend and vanilla JS frontend. No databases, no accounts, no external dependencies beyond Flask. Runs entirely on your machine.
 
-![Python](https://img.shields.io/badge/Python-3.10+-blue) ![Flask](https://img.shields.io/badge/Flask-3.0+-green) ![Tests](https://img.shields.io/badge/Tests-105%20passing-brightgreen)
+![Python](https://img.shields.io/badge/Python-3.10+-blue) ![Flask](https://img.shields.io/badge/Flask-3.0+-green) ![Tests](https://img.shields.io/badge/Tests-112%20passing-brightgreen)
 
 ## Quick Start
 
@@ -154,7 +154,7 @@ holdem/
 │   └── index.html             # Single-page app shell
 └── tests/
     ├── test_engine.py         # 44 tests: cards, deck, all hand ranks, kickers
-    ├── test_game.py           # 24 tests: game lifecycle, side pots, undo, busted players
+    ├── test_game.py           # 38 tests: game lifecycle, side pots, undo, turn order, race conditions
     ├── test_api.py            # 15 tests: all API endpoints
     └── test_final.py          # Integration: showdown, card reveal, game-over
 ```
@@ -163,7 +163,7 @@ holdem/
 
 ```bash
 python tests/test_engine.py    # 44 tests — card primitives, hand evaluation
-python tests/test_game.py      # 24 tests — game state machine, side pots, undo
+python tests/test_game.py      # 38 tests — game state machine, side pots, undo, turn order
 python tests/test_api.py       # 15 tests — every REST endpoint
 python tests/test_final.py     # Integration — showdown, game-over, exports
 ```
