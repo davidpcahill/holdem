@@ -11,7 +11,7 @@ A local web-based Texas Hold'em game with AI opponents and a real-time strategy 
 
 Built with Python/Flask backend and vanilla JS frontend. No databases, no accounts, no external dependencies beyond Flask. Runs entirely on your machine.
 
-![Python](https://img.shields.io/badge/Python-3.10+-blue) ![Flask](https://img.shields.io/badge/Flask-3.0+-green) ![Tests](https://img.shields.io/badge/Tests-83%20passing-brightgreen)
+![Python](https://img.shields.io/badge/Python-3.10+-blue) ![Flask](https://img.shields.io/badge/Flask-3.0+-green) ![Tests](https://img.shields.io/badge/Tests-105%20passing-brightgreen)
 
 ## Quick Start
 
@@ -168,7 +168,7 @@ python tests/test_api.py       # 15 tests — every REST endpoint
 python tests/test_final.py     # Integration — showdown, game-over, exports
 ```
 
-83 tests covering hand evaluation (all 10 ranks, wheel straights, 7-card best-of-21, tiebreakers), game lifecycle (blinds, dealing, streets, showdown, side pots), undo/redo, manual dealing, card assignment, player editing, history export, settings persistence, and HTML feature completeness.
+105 tests covering hand evaluation (all 10 ranks, wheel straights, 7-card best-of-21, tiebreakers), equity calculator (preflop lookup, Monte Carlo convergence), AI decision engine (all 4 styles, think time, edge cases), game lifecycle (blinds, dealing, streets, showdown, side pots), betting validation (min raise, all-in edge cases), undo/redo, advisor (preflop/postflop analysis), manual dealing, card assignment, player editing, history export, settings persistence, and HTML feature completeness.
 
 ## API Endpoints
 
