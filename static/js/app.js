@@ -236,12 +236,13 @@ document.addEventListener('alpine:init', () => {
                 if (this.betAmount < this.raiseMin) this.betAmount = this.raiseMin;
                 if (this.betAmount > this.raiseMax) this.betAmount = this.raiseMax;
                 // Refetch on turn change, new hand, fold (changes opponent count), or missing data
-                if (turnChanged || newHand || playersChanged || !this.advisor) {
+                // Debounce: skip if already loading (prevents duplicate from socket + response)
+                if (!this.advisorLoading && (turnChanged || newHand || playersChanged || !this.advisor)) {
                     this.fetchAdvisor();
                 }
                 this.checkPassPlay();
             } else {
-                // Always clear loading state when not our turn
+                // Show AI thinking status while waiting, clear advisor data
                 this.advisor = null;
                 this.advisorLoading = false;
                 if (this.state.phase !== 'playing') {

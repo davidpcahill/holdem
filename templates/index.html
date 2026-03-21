@@ -294,7 +294,10 @@
                             <div><span class="spinner"></span> Calculating recommendations...</div>
                         </template>
                         <template x-if="!advisorLoading && state.phase==='playing' && !canAct">
-                            <span>Waiting for your turn...</span>
+                            <div>
+                                <span class="spinner"></span>
+                                <span x-text="aiThinkingSeat >= 0 && state.players?.[aiThinkingSeat] ? state.players[aiThinkingSeat].name + ' is thinking...' : 'Waiting for your turn...'"></span>
+                            </div>
                         </template>
                         <template x-if="!advisorLoading && state.phase!=='playing'">
                             <span>Deal a hand to see recommendations.</span>
