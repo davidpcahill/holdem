@@ -544,13 +544,17 @@ class GameState:
         winners_info = []
         # Track total per seat to consolidate side pot wins
         seat_totals = {}
+        carry_forward = 0  # Chips from pots with no eligible players
         for pot in pots:
             eligible_hands = [(s, h) for s, h in hand_results if s in pot.eligible_seats]
             if not eligible_hands:
+                carry_forward += pot.amount
                 continue
+            pot_amount = pot.amount + carry_forward
+            carry_forward = 0
             winner_seats = HandEvaluator.find_winners(eligible_hands)
-            share = pot.amount // len(winner_seats)
-            remainder = pot.amount % len(winner_seats)
+            share = pot_amount // len(winner_seats)
+            remainder = pot_amount % len(winner_seats)
 
             for i, wseat in enumerate(winner_seats):
                 win_amount = share + (1 if i < remainder else 0)
@@ -565,6 +569,20 @@ class GameState:
                         "pot_label": pot.label,
                     }
                 seat_totals[wseat]["amount"] += win_amount
+
+        # If any carry_forward remains (all pots had no eligible players), give to first non-folded
+        if carry_forward > 0 and players_in:
+            fallback = players_in[0]
+            fallback.win_chips(carry_forward)
+            if fallback.seat not in seat_totals:
+                seat_totals[fallback.seat] = {
+                    "seat": fallback.seat,
+                    "name": fallback.name,
+                    "amount": 0,
+                    "hand_name": "Unclaimed pot",
+                    "pot_label": "Main Pot",
+                }
+            seat_totals[fallback.seat]["amount"] += carry_forward
 
         winners_info = list(seat_totals.values())
 

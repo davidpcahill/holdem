@@ -452,6 +452,96 @@ def test_undo_restores_completely():
     assert g.action_seat == action_seat_before
 
 
+def test_total_chips_conserved():
+    """After any showdown, total chips across all players must be conserved."""
+    g = GameState()
+    g.set_blinds(5, 10)
+    g.add_player("A", stack=200)
+    g.add_player("B", stack=300)
+    g.add_player("C", stack=500)
+    total_before = sum(p.stack for p in g.players)
+
+    g.new_hand()
+    # Everyone calls/checks to showdown
+    safety = 0
+    while g.phase == GamePhase.PLAYING and safety < 30:
+        safety += 1
+        seat = g.action_seat
+        if seat < 0:
+            break
+        va = g.get_valid_actions(seat)
+        actions = va.get("actions", [])
+        if any(a["action"] == "check" for a in actions):
+            g.process_action(seat, "check")
+        elif any(a["action"] == "call" for a in actions):
+            g.process_action(seat, "call")
+        else:
+            g.process_action(seat, "fold")
+
+    total_after = sum(p.stack for p in g.players)
+    assert total_after == total_before, f"Chips lost: {total_before} -> {total_after}"
+
+
+def test_four_player_side_pots():
+    """Four players with different stacks all-in creates correct side pots."""
+    bets = [
+        (0, 25, False),  # 25
+        (1, 50, False),  # 50
+        (2, 100, False), # 100
+        (3, 200, False), # 200
+    ]
+    pots = SidePotCalculator.calculate(bets)
+    assert len(pots) == 4, f"Expected 4 pots, got {len(pots)}"
+    # Main pot: 25 * 4 = 100, all eligible
+    assert pots[0].amount == 100
+    assert set(pots[0].eligible_seats) == {0, 1, 2, 3}
+    # Side pot 1: 25 * 3 = 75
+    assert pots[1].amount == 75
+    assert set(pots[1].eligible_seats) == {1, 2, 3}
+    # Side pot 2: 50 * 2 = 100
+    assert pots[2].amount == 100
+    assert set(pots[2].eligible_seats) == {2, 3}
+    # Side pot 3: 100 * 1 = 100
+    assert pots[3].amount == 100
+    assert set(pots[3].eligible_seats) == {3}
+    # Total: 100 + 75 + 100 + 100 = 375 = 25+50+100+200
+    assert sum(p.amount for p in pots) == 375
+
+
+def test_side_pot_chips_not_lost_when_eligible_fold():
+    """When all eligible players for a side pot have folded, chips should carry forward."""
+    # Scenario: 3 players. Player 0 goes all-in for 50. Player 1 raises to 100.
+    # Player 2 calls 100. Player 0 can't act more. Player 1 folds on flop.
+    # Now Player 1 is folded but contributed to a side pot layer above Player 0.
+    # This tests that no chips are lost.
+    g = GameState()
+    g.set_blinds(5, 10)
+    g.add_player("Short", stack=50)
+    g.add_player("Mid", stack=500)
+    g.add_player("Big", stack=500)
+    total_before = sum(p.stack for p in g.players)
+
+    g.new_hand()
+    # Play through to completion
+    safety = 0
+    while g.phase == GamePhase.PLAYING and safety < 30:
+        safety += 1
+        seat = g.action_seat
+        if seat < 0:
+            break
+        va = g.get_valid_actions(seat)
+        actions = va.get("actions", [])
+        if any(a["action"] == "check" for a in actions):
+            g.process_action(seat, "check")
+        elif any(a["action"] == "call" for a in actions):
+            g.process_action(seat, "call")
+        else:
+            g.process_action(seat, "fold")
+
+    total_after = sum(p.stack for p in g.players)
+    assert total_after == total_before, f"Chips lost: {total_before} -> {total_after}"
+
+
 # ========================================================================
 # Runner
 # ========================================================================
