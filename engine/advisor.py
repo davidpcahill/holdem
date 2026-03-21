@@ -19,21 +19,23 @@ from typing import List, Dict, Optional, Tuple
 from collections import Counter
 from itertools import combinations
 
-from .deck import Card, Suit, RANK_SHORT
+from .deck import Card, Suit, RANK_SHORT, RANK_DISPLAY, SUIT_SYMBOLS
 from .hand_eval import HandEvaluator, HandRank
 from .equity import EquityCalculator, EquityResult
+import time as _time
 
 
 class OutsInfo:
     """Information about drawing outs."""
     def __init__(self, count: int = 0, draws: List[str] = None,
                  hit_turn_pct: float = 0, hit_river_pct: float = 0,
-                 hit_either_pct: float = 0):
+                 hit_either_pct: float = 0, out_cards: List[dict] = None):
         self.count = count
         self.draws = draws or []
         self.hit_turn_pct = hit_turn_pct
         self.hit_river_pct = hit_river_pct
         self.hit_either_pct = hit_either_pct
+        self.out_cards = out_cards or []
 
     def to_dict(self) -> dict:
         return {
@@ -42,6 +44,7 @@ class OutsInfo:
             "hit_turn_pct": round(self.hit_turn_pct, 1),
             "hit_river_pct": round(self.hit_river_pct, 1),
             "hit_either_pct": round(self.hit_either_pct, 1),
+            "out_cards": self.out_cards[:12],
         }
 
 
@@ -95,6 +98,7 @@ class AdvisorResult:
         self.top_action: Optional[ActionRecommendation] = None
         self.best_hand_cards: List[dict] = []  # The 5 cards making the best hand
         self.adjusted_equity: Optional[float] = None  # Equity discounted for opponent betting strength
+        self.timing: dict = {}  # Section timings in ms
 
     def to_dict(self) -> dict:
         return {
@@ -117,6 +121,7 @@ class AdvisorResult:
             "estimated_ev": round(self.estimated_ev, 1),
             "actions": [a.to_dict() for a in self.actions],
             "top_action": self.top_action.to_dict() if self.top_action else None,
+            "timing": self.timing,
         }
 
 
@@ -141,8 +146,10 @@ class Advisor:
         Generate complete advisory analysis for a player's situation.
         """
         result = AdvisorResult()
+        t_start = _time.perf_counter()
 
         # --- Hand evaluation ---
+        t0 = _time.perf_counter()
         all_cards = hole_cards + community
         if community and len(all_cards) >= 5:
             hand_result = HandEvaluator.evaluate(all_cards)
@@ -157,31 +164,33 @@ class Advisor:
             result.draw_description = HandEvaluator.describe_best_draw(hole_cards, community)
             result.best_hand_cards = [c.to_dict() for c in hand_result.cards]
         elif len(hole_cards) == 2:
-            # Preflop: just show the hole cards, not a misleading "pair" or "high card"
-            from .deck import RANK_DISPLAY, SUIT_SYMBOLS
             c1, c2 = hole_cards
             result.hand_name = f"{RANK_DISPLAY[c1.rank]}{SUIT_SYMBOLS[c1.suit]} {RANK_DISPLAY[c2.rank]}{SUIT_SYMBOLS[c2.suit]}"
             result.hand_rank = "PREFLOP"
             result.draw_description = ""
             result.best_hand_cards = [c.to_dict() for c in hole_cards]
+        result.timing["hand"] = round((_time.perf_counter() - t0) * 1000, 1)
 
         # --- Equity ---
+        t0 = _time.perf_counter()
         if equity:
             result.equity = equity
         elif len(hole_cards) == 2:
-            # Sync calculation (preflop uses lookup, post-flop runs quick MC)
             if not community:
                 result.equity = EquityCalculator.preflop_equity(hole_cards, num_opponents)
             else:
                 result.equity = EquityCalculator.monte_carlo(
                     hole_cards, community, num_opponents, simulations=3000
                 )
+        result.timing["equity"] = round((_time.perf_counter() - t0) * 1000, 1)
 
         win_pct = result.equity.win if result.equity else 50.0
 
         # --- Outs ---
+        t0 = _time.perf_counter()
         if community and len(community) < 5:
             result.outs = Advisor._count_outs(hole_cards, community)
+        result.timing["outs"] = round((_time.perf_counter() - t0) * 1000, 1)
 
         # --- Pot odds ---
         if to_call > 0 and (pot + to_call) > 0:
@@ -269,17 +278,20 @@ class Advisor:
         if action_equity != win_pct:
             result.adjusted_equity = action_equity
 
+        t0 = _time.perf_counter()
         result.actions = Advisor._rank_actions(
             action_equity, result.pot_odds, action_equity - result.pot_odds,
             result.spr, result.fold_equity, result.implied_odds,
             result.position_modifier, pot, to_call, stack,
             valid_actions, num_opponents, has_community=len(community) > 0
         )
+        result.timing["actions"] = round((_time.perf_counter() - t0) * 1000, 1)
 
         if result.actions:
             result.top_action = result.actions[0]
             result.estimated_ev = result.actions[0].ev
 
+        result.timing["total"] = round((_time.perf_counter() - t_start) * 1000, 1)
         return result
 
     @staticmethod
@@ -308,6 +320,7 @@ class Advisor:
         # Board pairings don't count: pairing a 3 on the board helps everyone equally
         # Only count: pairing hole cards, completing flushes/straights, improving to trips+
         improving_cards = []
+        out_card_details = []  # {card info, makes: "Pair of Ks"}
         hole_ranks = set(c.rank for c in hole_cards)
         hole_suits = [c.suit for c in hole_cards]
 
@@ -326,22 +339,34 @@ class Advisor:
             # Completes a flush with our suited hole cards
             elif card.suit in hole_suits:
                 suit_count = sum(1 for c in all_cards if c.suit == card.suit)
-                if suit_count >= 3:  # We already have 3+ of this suit, 4th/5th completes
+                if suit_count >= 3:
                     is_meaningful = True
             # Makes two pair or better using at least one hole card
             elif new_result.rank.value >= 2:  # TWO_PAIR or better
-                # Verify at least one hole card is part of the made hand
                 new_hand_ranks = [c.rank for c in new_result.cards] if hasattr(new_result, 'cards') and new_result.cards else []
                 if any(r in new_hand_ranks for r in hole_ranks):
                     is_meaningful = True
             # Straight completions where our hole card matters
             elif new_result.rank == HandRank.STRAIGHT:
-                is_meaningful = True  # Straights inherently use a range of ranks
+                is_meaningful = True
 
             if is_meaningful:
                 improving_cards.append(card)
+                out_card_details.append({
+                    "short": card.short,
+                    "display": f"{RANK_DISPLAY[card.rank]}{SUIT_SYMBOLS[card.suit]}",
+                    "is_red": card.is_red,
+                    "makes": new_result.name,
+                    "rank_value": new_result.rank.value,
+                })
 
         outs = len(improving_cards)
+
+        # Sort by hand strength descending (flush > straight > trips > two pair > pair)
+        out_card_details.sort(key=lambda x: (-x['rank_value'], x['display']))
+        # Remove rank_value from output (internal sorting only)
+        for oc in out_card_details:
+            del oc['rank_value']
 
         # Identify draw types
         suit_counts = Counter(c.suit for c in all_cards)
@@ -390,12 +415,18 @@ class Advisor:
         else:
             hit_either = hit_turn  # Only one card to come
 
+        # Add individual hit percentage per out card
+        single_out_pct = (1.0 / unseen * 100) if unseen > 0 else 0
+        for oc in out_card_details:
+            oc["hit_pct"] = round(single_out_pct, 1)
+
         return OutsInfo(
             count=outs,
             draws=draws,
             hit_turn_pct=hit_turn,
             hit_river_pct=hit_river,
             hit_either_pct=hit_either,
+            out_cards=out_card_details,
         )
 
     @staticmethod

@@ -183,7 +183,7 @@
                                 <span style="font-weight:600;font-size:0.8rem" title="Win probability from Monte Carlo simulation">Equity</span>
                                 <span style="font-size:0.6rem;color:var(--text-muted)">
                                     <span x-text="advisor?.equity?.is_preflop?'Preflop lookup':(advisor?.equity?.simulations||0)+' sims'"></span>
-                                    <span x-show="advisor?.timing?.equity" x-text="' · ' + (advisor?.timing?.equity||0) + 'ms'"></span>
+                                    <span x-show="advisor?.timing?.equity != null" x-text="' · ' + (advisor?.timing?.equity) + 'ms'"></span>
                                 </span>
                             </div>
                             <div class="equity-bar">
@@ -235,22 +235,25 @@
                             </div>
                         </div>
                         <!-- Outs with card details -->
-                        <div x-show="advisor?.outs && advisor.outs.count>0" style="padding:3px 0">
-                            <div style="font-size:0.75rem;color:var(--text-secondary);display:flex;justify-content:space-between;align-items:baseline">
-                                <span>
+                        <div x-show="advisor?.outs && advisor.outs.count>0" style="padding:4px 0">
+                            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+                                <span style="font-size:0.75rem;color:var(--text-secondary)">
                                     <span style="color:var(--gold);font-weight:700" x-text="advisor?.outs?.count||0"></span> outs
                                     <span x-text="(advisor?.outs?.draws||[]).length ? '(' + (advisor?.outs?.draws||[]).join(', ') + ')' : ''"></span>
                                     — <span x-text="(advisor?.outs?.hit_either_pct?.toFixed(1)||'0') + '% by river'"></span>
                                 </span>
-                                <span x-show="advisor?.timing?.outs" style="font-size:0.55rem;color:var(--text-muted)" x-text="(advisor?.timing?.outs||0)+'ms'"></span>
+                                <span x-show="advisor?.timing?.outs != null" style="font-size:0.55rem;color:var(--text-muted)" x-text="(advisor?.timing?.outs)+'ms'"></span>
                             </div>
-                            <!-- Individual out cards -->
-                            <div x-show="advisor?.outs?.out_cards?.length" style="display:flex;flex-wrap:wrap;gap:3px;margin-top:3px">
+                            <!-- Individual out cards grouped by what they make -->
+                            <div x-show="advisor?.outs?.out_cards?.length" style="display:flex;flex-wrap:wrap;gap:4px">
                                 <template x-for="oc in (advisor?.outs?.out_cards||[])" :key="'oc_'+oc.short">
-                                    <span :title="oc.makes + ' (' + oc.hit_pct + '%)'"
-                                          style="font-size:0.7rem;font-weight:600;font-family:var(--font-mono);padding:1px 4px;border-radius:3px;background:var(--bg-tertiary);border:1px solid var(--border-muted)"
-                                          :style="oc.is_red ? 'color:var(--card-red)' : 'color:var(--text-primary)'"
-                                          x-text="oc.display"></span>
+                                    <div :title="oc.makes"
+                                         style="display:inline-flex;align-items:center;gap:3px;padding:2px 6px;border-radius:4px;background:var(--bg-tertiary);border:1px solid var(--border-muted);font-family:var(--font-mono);font-size:0.7rem;line-height:1.2">
+                                        <span style="font-weight:700"
+                                              :style="oc.is_red ? 'color:var(--card-red)' : 'color:var(--text-primary)'"
+                                              x-text="oc.display"></span>
+                                        <span style="color:var(--text-muted);font-size:0.6rem" x-text="oc.hit_pct + '%'"></span>
+                                    </div>
                                 </template>
                             </div>
                         </div>
@@ -260,7 +263,7 @@
                                 <div style="font-weight:600;font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.3px;margin-top:2px">
                                     Recommendations
                                 </div>
-                                <span x-show="advisor?.timing?.total" style="font-size:0.55rem;color:var(--text-muted)" x-text="(advisor?.timing?.total||0)+'ms total'"></span>
+                                <span x-show="advisor?.timing?.total != null" style="font-size:0.55rem;color:var(--text-muted)" x-text="(advisor?.timing?.total)+'ms total'"></span>
                             </div>
                             <template x-for="(rec,idx) in (advisor?.actions||[])" :key="'r'+idx">
                                 <div class="advisor-action-item" :class="{'top-action':idx===0}"
