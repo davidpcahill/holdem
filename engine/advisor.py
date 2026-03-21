@@ -405,14 +405,26 @@ class Advisor:
                 recs.append(ActionRecommendation(action, score, ev, label, reasoning))
 
             elif action == "check":
-                # Check costs nothing — EV = your equity share of the pot, minus fold baseline (0)
-                # Display as the value of NOT folding
-                ev = eq * pot
+                # Check EV must account for imperfect equity realization:
+                # - Checking gives opponents free cards to improve
+                # - You miss value extraction from worse hands
+                # Standard equity realization for checks is ~65-80%
+                # Higher equity = more value missed by not betting
+                if eq > 0.65:
+                    # Strong hands lose the most by checking (missed value)
+                    realization = 0.65
+                elif eq > 0.45:
+                    # Medium hands realize reasonably well by checking
+                    realization = 0.75
+                else:
+                    # Weak hands benefit most from free cards
+                    realization = 0.85
+                ev = eq * pot * realization
                 score = max(30, min(80, 30 + equity * 0.5))
-                if equity > 70:
-                    label = "Slow-play"
-                    reasoning = "Strong hand — trapping"
-                elif equity > 40:
+                if equity > 85:
+                    label = "Check"
+                    reasoning = "Free card — but consider betting for value"
+                elif equity > 55:
                     label = "Check"
                     reasoning = "Free card with decent equity"
                 else:
