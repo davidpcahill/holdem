@@ -618,17 +618,18 @@
         </div>
 
         <!-- GAME OVER OVERLAY -->
-        <div class="modal-overlay" x-show="state.game_over" x-cloak style="z-index:700">
+        <div class="modal-overlay" x-show="state.game_over && !gameOverDismissed" x-cloak style="z-index:700">
             <div class="showdown-card" style="min-width:350px;border-color:var(--gold-bright);box-shadow:0 0 40px rgba(212,168,67,0.5)">
                 <div style="font-size:2.5rem;margin-bottom:8px">🏆</div>
                 <div style="font-size:1.4rem;font-weight:800;color:var(--gold-bright);margin-bottom:12px">Game Over</div>
                 <div style="font-size:1.2rem;font-weight:700;color:var(--text-primary);margin-bottom:4px"
-                     x-text="(state.game_over?.winner_name || 'Unknown') + ' wins the game!'"></div>
+                     x-text="(state.game_over?.winner_name || 'Unknown') + ' won the game!'"></div>
                 <div style="font-size:0.9rem;color:var(--text-secondary);margin-bottom:8px"
                      x-text="'Final stack: $' + (state.game_over?.winner_stack || 0)"></div>
                 <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:16px"
                      x-text="(state.game_over?.hands_played || 0) + ' hands played'"></div>
                 <div style="display:flex;gap:8px;justify-content:center">
+                    <button class="btn" @click="gameOverDismissed = true">Dismiss</button>
                     <button class="btn btn-gold btn-lg" @click="showSetup = true">New Game</button>
                 </div>
             </div>

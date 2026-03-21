@@ -49,6 +49,7 @@ document.addEventListener('alpine:init', () => {
         passPlayTimer: null,
         lastHumanSeat: -1,
         autoAdvanceTimer: null,
+        gameOverDismissed: false,
 
         // Settings (local copy, synced to server)
         localSettings: {
@@ -287,6 +288,7 @@ document.addEventListener('alpine:init', () => {
                     this._lastHandNum = 0;
                     this.lastHumanSeat = -1;
                     this.passPlayActive = false;
+                    this.gameOverDismissed = false;
                     this.cancelAutoAdvance();
                     // Apply server state
                     this.updateState(data.state);

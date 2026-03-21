@@ -1,0 +1,5 @@
+holdem features to add
+
+better ai / search
+
+show time to calculate each section
