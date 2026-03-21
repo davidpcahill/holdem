@@ -358,6 +358,60 @@ def test_describe_best_draw():
 
 
 # ========================================================================
+# Equity Calculator
+# ========================================================================
+
+def test_preflop_equity_pocket_aces():
+    """Pocket aces should have 80-90% equity heads-up."""
+    from engine.equity import EquityCalculator
+    aa = [Card.from_short("As"), Card.from_short("Ah")]
+    result = EquityCalculator.preflop_equity(aa, num_opponents=1)
+    assert 80 <= result.win <= 90, f"AA equity {result.win}% not in expected range"
+    assert result.is_preflop is True
+
+
+def test_preflop_equity_ordering():
+    """AA should beat KK should beat 72o in preflop equity."""
+    from engine.equity import EquityCalculator
+    aa = [Card.from_short("As"), Card.from_short("Ah")]
+    kk = [Card.from_short("Ks"), Card.from_short("Kh")]
+    low = [Card.from_short("7s"), Card.from_short("2h")]
+    eq_aa = EquityCalculator.preflop_equity(aa, 1).win
+    eq_kk = EquityCalculator.preflop_equity(kk, 1).win
+    eq_low = EquityCalculator.preflop_equity(low, 1).win
+    assert eq_aa > eq_kk > eq_low, f"Ordering wrong: AA={eq_aa} KK={eq_kk} 72o={eq_low}"
+
+
+def test_monte_carlo_sum_to_100():
+    """Monte Carlo win + tie + loss should sum to ~100%."""
+    from engine.equity import EquityCalculator
+    hole = [Card.from_short("As"), Card.from_short("Kh")]
+    community = [Card.from_short("Qs"), Card.from_short("Jd"), Card.from_short("2c")]
+    result = EquityCalculator.monte_carlo(hole, community, num_opponents=1, simulations=1000)
+    total = result.win + result.tie + result.loss
+    assert 99.0 <= total <= 101.0, f"Sum {total}% not ~100%"
+
+
+def test_monte_carlo_strong_hand():
+    """Top set on rainbow flop should have >80% equity heads-up."""
+    from engine.equity import EquityCalculator
+    hole = [Card.from_short("Qs"), Card.from_short("Qh")]
+    community = [Card.from_short("Qd"), Card.from_short("7c"), Card.from_short("2s")]
+    result = EquityCalculator.monte_carlo(hole, community, num_opponents=1, simulations=2000)
+    assert result.win > 80, f"Top set equity {result.win}% should be >80%"
+
+
+def test_preflop_equity_multiway():
+    """Equity should decrease with more opponents."""
+    from engine.equity import EquityCalculator
+    hand = [Card.from_short("As"), Card.from_short("Kh")]
+    eq_1 = EquityCalculator.preflop_equity(hand, 1).win
+    eq_3 = EquityCalculator.preflop_equity(hand, 3).win
+    eq_5 = EquityCalculator.preflop_equity(hand, 5).win
+    assert eq_1 > eq_3 > eq_5, f"Equity should decrease: 1={eq_1} 3={eq_3} 5={eq_5}"
+
+
+# ========================================================================
 # Runner
 # ========================================================================
 
