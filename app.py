@@ -360,6 +360,10 @@ def api_deal_card():
 @app.route("/api/undo", methods=["POST"])
 def api_undo():
     """Undo last action."""
+    if (game.phase == GamePhase.PLAYING
+            and 0 <= game.action_seat < len(game.players)
+            and game.players[game.action_seat].player_type == PlayerType.AI):
+        return jsonify({"error": "Cannot undo during AI turn"}), 409
     result = game.undo_action()
     if "error" in result:
         return jsonify(result), 400
@@ -369,6 +373,10 @@ def api_undo():
 @app.route("/api/undo_hand", methods=["POST"])
 def api_undo_hand():
     """Undo entire current hand."""
+    if (game.phase == GamePhase.PLAYING
+            and 0 <= game.action_seat < len(game.players)
+            and game.players[game.action_seat].player_type == PlayerType.AI):
+        return jsonify({"error": "Cannot undo during AI turn"}), 409
     result = game.undo_hand()
     if "error" in result:
         return jsonify(result), 400

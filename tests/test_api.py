@@ -333,6 +333,48 @@ def test_state_completeness():
             assert isinstance(a, dict), f'Action not dict: {type(a)}'
 
 
+def test_undo_blocked_during_ai_turn():
+    """Undo should be blocked when it's an AI player's turn."""
+    with app.test_client() as c:
+        api(c, 'POST', '/api/new_game', {
+            'small_blind': 5, 'big_blind': 10,
+            'players': [
+                {'name': 'A', 'stack': 1000, 'player_type': 'human'},
+                {'name': 'B', 'stack': 1000, 'player_type': 'ai', 'ai_style': 'tight_aggressive'},
+            ]
+        })
+        api(c, 'POST', '/api/new_hand')
+        s = api(c, 'GET', '/api/state')
+        # In heads-up, dealer(seat 0) is SB and acts first preflop
+        # seat 0 is human, seat 1 is AI
+        seat = s['action_seat']
+        # Human calls
+        api(c, 'POST', '/api/action', {'seat': seat, 'action': 'call'})
+        # Now it's AI's turn (BB check/option)
+        # Try to undo — should be blocked
+        d = c.post('/api/undo', json={}).get_json()
+        assert 'error' in d, f"Undo should be blocked during AI turn, got: {d}"
+
+
+def test_undo_hand_blocked_during_ai_turn():
+    """Undo hand should be blocked when it's an AI player's turn."""
+    with app.test_client() as c:
+        api(c, 'POST', '/api/new_game', {
+            'small_blind': 5, 'big_blind': 10,
+            'players': [
+                {'name': 'A', 'stack': 1000, 'player_type': 'human'},
+                {'name': 'B', 'stack': 1000, 'player_type': 'ai', 'ai_style': 'tight_aggressive'},
+            ]
+        })
+        api(c, 'POST', '/api/new_hand')
+        s = api(c, 'GET', '/api/state')
+        seat = s['action_seat']
+        api(c, 'POST', '/api/action', {'seat': seat, 'action': 'call'})
+        # Now it's AI's turn — undo hand should be blocked
+        d = c.post('/api/undo_hand', json={}).get_json()
+        assert 'error' in d, f"Undo hand should be blocked during AI turn, got: {d}"
+
+
 # ════════════════════════════════════════════════
 # Runner
 # ════════════════════════════════════════════════
