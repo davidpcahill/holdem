@@ -333,13 +333,33 @@ class Advisor:
 
     @staticmethod
     def _estimate_fold_equity(pot: int, to_call: int, position: str, num_opponents: int) -> float:
-        """Rough fold equity estimate based on situation."""
+        """
+        Rough fold equity estimate based on situation.
+        
+        Key insight: if to_call > 0, an opponent bet into us — they've shown
+        strength and are much less likely to fold to a raise. Fold equity
+        drops significantly when facing aggression.
+        """
         base = 30.0
         # Late position = more fold equity
         pos_adj = {"BTN": 10, "CO": 5, "HJ": 2, "SB": -5, "BB": -3}.get(position, 0)
         # Fewer opponents = more fold equity
         opp_adj = max(0, (3 - num_opponents) * 8)
-        return min(80, max(5, base + pos_adj + opp_adj))
+
+        raw = base + pos_adj + opp_adj
+
+        # Facing a bet: opponent has shown strength — cut fold equity sharply
+        if to_call > 0:
+            # The larger the bet relative to pot, the stronger they are
+            bet_fraction = to_call / max(pot, 1)
+            if bet_fraction > 0.5:
+                raw *= 0.3   # Big bet = very unlikely to fold
+            elif bet_fraction > 0.25:
+                raw *= 0.45  # Medium bet
+            else:
+                raw *= 0.6   # Small bet / min-raise
+
+        return min(60, max(3, raw))
 
     @staticmethod
     def _rank_actions(
@@ -466,18 +486,22 @@ class Advisor:
                         bet_range=(bet_lo_total, bet_hi_total), bet_type="value",
                     ))
 
-                # Semi-bluff: only post-flop (need draws to semi-bluff with)
-                if has_community and 25 < equity < 60 and fold_equity > 20:
+                # Semi-bluff: only post-flop, only if the math actually works out
+                # Lower equity requires higher fold equity to be profitable
+                min_fold_eq = max(25, 60 - equity)  # e.g., 25% equity needs 35% fold equity
+                if has_community and 25 < equity < 60 and fold_equity > min_fold_eq:
                     new_chips = min(actual_max_new_chips, max(int(pot * 0.45), 1))
                     ev_semi = (fold_equity / 100) * pot + (1 - fold_equity / 100) * (eq * (pot + new_chips) - new_chips)
-                    score = max(30, min(70, 30 + ev_semi / max(pot, 1) * 80))
-                    bet_total = max(min_bet, min(max_bet, valid_actions.get("player_current_bet", 0) + new_chips))
-                    recs.append(ActionRecommendation(
-                        action, score, ev_semi, "Semi-Bluff",
-                        f"Fold equity {fold_equity:.0f}% + draw equity {equity:.0f}%",
-                        bet_range=(bet_total, min(max_bet, bet_total + int(pot * 0.2))),
-                        bet_type="semi_bluff",
-                    ))
+                    # Only recommend if EV is actually positive
+                    if ev_semi > 0:
+                        score = max(30, min(70, 30 + ev_semi / max(pot, 1) * 80))
+                        bet_total = max(min_bet, min(max_bet, valid_actions.get("player_current_bet", 0) + new_chips))
+                        recs.append(ActionRecommendation(
+                            action, score, ev_semi, "Semi-Bluff",
+                            f"Fold equity {fold_equity:.0f}% + draw equity {equity:.0f}%",
+                            bet_range=(bet_total, min(max_bet, bet_total + int(pot * 0.2))),
+                            bet_type="semi_bluff",
+                        ))
 
                 # Bluff: only post-flop (preflop bluffs need range-based logic we don't have)
                 if has_community and equity < 30 and fold_equity > 35 and spr > 3:
