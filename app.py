@@ -75,6 +75,13 @@ def _run_ai_turn():
             # Calculate think time
             think_time = ai_engine.calculate_think_time(player)
 
+            # Show "thinking" indicator BEFORE computation so UI is responsive
+            socketio.emit("ai_thinking", {
+                "seat": player.seat,
+                "name": player.name,
+                "think_time": think_time,
+            })
+
             # Get equity for AI decision
             community = game.community_cards
             num_opponents = len([p for p in game.players if p.is_in_hand and p.seat != player.seat])
@@ -103,12 +110,7 @@ def _run_ai_turn():
                 num_opponents=num_opponents,
             )
 
-            # Wait for think time (emit "thinking" state)
-            socketio.emit("ai_thinking", {
-                "seat": player.seat,
-                "name": player.name,
-                "think_time": think_time,
-            })
+            # Wait for remaining think time
             time.sleep(think_time)
 
             # Abort if game was reset during think time
@@ -126,18 +128,7 @@ def _run_ai_turn():
             post_street = game.street.value
             street_changed = pre_street != post_street and post_street not in ('showdown', 'hand_over')
 
-            # If next player is human, piggyback advisor
-            if (game.phase == GamePhase.PLAYING
-                    and game.action_seat >= 0
-                    and game.action_seat < len(game.players)):
-                next_p = game.players[game.action_seat]
-                if next_p.player_type == PlayerType.HUMAN and next_p.hole_cards:
-                    try:
-                        action_state["_advisor"] = _compute_advisor(next_p.seat)
-                    except Exception:
-                        pass
-
-            # Single emit per action — the ONLY state push during AI play
+            # Emit action immediately — don't block on advisor computation
             socketio.emit("ai_action", {
                 "seat": player.seat,
                 "name": player.name,
@@ -146,6 +137,19 @@ def _run_ai_turn():
                 "state": action_state,
                 "street_changed": street_changed,
             })
+
+            # If next player is human, push advisor as a separate event
+            # so the action appears instantly in the UI
+            if (game.phase == GamePhase.PLAYING
+                    and game.action_seat >= 0
+                    and game.action_seat < len(game.players)):
+                next_p = game.players[game.action_seat]
+                if next_p.player_type == PlayerType.HUMAN and next_p.hole_cards:
+                    try:
+                        advisor_data = _compute_advisor(next_p.seat)
+                        socketio.emit("advisor_update", advisor_data)
+                    except Exception:
+                        socketio.emit("advisor_update", {"error": "failed"})
 
             # If hand ended, stop (no separate state_update — ai_action already has it)
             if game.phase != GamePhase.PLAYING:

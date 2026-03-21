@@ -179,6 +179,8 @@ document.addEventListener('alpine:init', () => {
 
                 this.socket.on('ai_action', (data) => {
                     this.aiThinkingSeat = -1;
+                    // Mark advisor as loading — advisor_update event will follow
+                    this.advisorLoading = true;
                     // Sound for AI action
                     const act = data.decision?.action;
                     if (act === 'fold') window.pokerSounds?.fold();
@@ -201,6 +203,14 @@ document.addEventListener('alpine:init', () => {
                         window.pokerSounds?.win();
                         this.startAutoAdvance();
                     }
+                });
+
+                // Advisor data pushed separately from ai_action to avoid blocking
+                this.socket.on('advisor_update', (data) => {
+                    if (this.advisorEnabled && this.canAct && !data.error) {
+                        this.advisor = data;
+                    }
+                    this.advisorLoading = false;
                 });
             } catch (e) {
                 console.warn('Socket connection failed, using REST only:', e);

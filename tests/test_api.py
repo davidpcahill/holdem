@@ -388,6 +388,8 @@ def test_advisor_postflop():
 def test_undo_blocked_during_ai_turn():
     """Undo should be blocked when it's an AI player's turn."""
     with app.test_client() as c:
+        # Use realistic timing so AI thread doesn't complete before undo request
+        api(c, 'POST', '/api/settings', {'timing_preset': 'realistic'})
         api(c, 'POST', '/api/new_game', {
             'small_blind': 5, 'big_blind': 10,
             'players': [
@@ -411,6 +413,8 @@ def test_undo_blocked_during_ai_turn():
 def test_undo_hand_blocked_during_ai_turn():
     """Undo hand should be blocked when it's an AI player's turn."""
     with app.test_client() as c:
+        # Use realistic timing so AI thread doesn't complete before undo request
+        api(c, 'POST', '/api/settings', {'timing_preset': 'realistic'})
         api(c, 'POST', '/api/new_game', {
             'small_blind': 5, 'big_blind': 10,
             'players': [
