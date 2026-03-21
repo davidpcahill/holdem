@@ -596,6 +596,200 @@ def test_side_pot_chips_not_lost_when_eligible_fold():
 
 
 # ========================================================================
+# Turn Order & Race Condition Tests
+# ========================================================================
+
+def test_preflop_turn_order_3_players():
+    """Preflop action order: UTG (left of BB) → SB → BB option."""
+    g = make_game(3)
+    g.new_hand()
+    dealer = g.dealer_seat
+    n = len(g.players)
+    # In 3-player: SB is left of dealer, BB is left of SB
+    sb_seat = (dealer + 1) % n
+    bb_seat = (dealer + 2) % n
+    utg_seat = dealer  # In 3-player, UTG is the dealer/BTN
+
+    # First to act should be UTG (left of BB, which wraps to dealer in 3-player)
+    assert g.action_seat == utg_seat, \
+        f"First to act should be UTG (seat {utg_seat}), got seat {g.action_seat}"
+
+    # UTG acts
+    g.process_action(g.action_seat, "call")
+    assert g.action_seat == sb_seat, \
+        f"After UTG, should be SB (seat {sb_seat}), got seat {g.action_seat}"
+
+    # SB acts
+    g.process_action(g.action_seat, "call")
+    assert g.action_seat == bb_seat, \
+        f"After SB, should be BB (seat {bb_seat}), got seat {g.action_seat}"
+
+
+def test_postflop_turn_order_3_players():
+    """Postflop action order: SB (left of dealer) → BB → BTN."""
+    g = make_game(3)
+    g.new_hand()
+    dealer = g.dealer_seat
+    n = len(g.players)
+    sb_seat = (dealer + 1) % n
+    bb_seat = (dealer + 2) % n
+
+    # Play through preflop: all call/check
+    while g.street == Street.PREFLOP and g.phase == GamePhase.PLAYING:
+        seat = g.action_seat
+        va = g.get_valid_actions(seat)
+        actions = [a["action"] for a in va.get("actions", [])]
+        if "check" in actions:
+            g.process_action(seat, "check")
+        else:
+            g.process_action(seat, "call")
+
+    assert g.street == Street.FLOP, f"Should be on flop, got {g.street}"
+
+    # First to act postflop should be SB (left of dealer)
+    assert g.action_seat == sb_seat, \
+        f"First postflop actor should be SB (seat {sb_seat}), got seat {g.action_seat}"
+
+
+def test_turn_order_skips_folded_players():
+    """After a fold, that player is skipped in subsequent action."""
+    g = make_game(3)
+    g.new_hand()
+    dealer = g.dealer_seat
+    n = len(g.players)
+    sb_seat = (dealer + 1) % n
+    bb_seat = (dealer + 2) % n
+
+    # UTG folds
+    utg_seat = g.action_seat
+    g.process_action(utg_seat, "fold")
+
+    # SB calls
+    assert g.action_seat == sb_seat
+    g.process_action(sb_seat, "call")
+
+    # BB checks (option)
+    assert g.action_seat == bb_seat
+    g.process_action(bb_seat, "check")
+
+    # Now on flop — folded UTG should be skipped
+    assert g.street == Street.FLOP
+    assert g.action_seat != utg_seat, \
+        f"Folded player (seat {utg_seat}) should not be action seat"
+    # First active postflop should be SB (if SB is left of dealer)
+    assert g.action_seat == sb_seat, \
+        f"First postflop actor should be SB (seat {sb_seat}), got {g.action_seat}"
+
+
+def test_turn_order_skips_all_in_players():
+    """All-in players should be skipped for action but stay in hand."""
+    g = GameState()
+    g.set_blinds(5, 10)
+    g.add_player("BTN", stack=50)   # Will go all-in
+    g.add_player("SB", stack=1000)
+    g.add_player("BB", stack=1000)
+    g.new_hand()
+
+    # BTN goes all-in
+    btn_seat = g.action_seat
+    g.process_action(btn_seat, "raise", 50)
+
+    # SB calls
+    sb_seat = g.action_seat
+    assert sb_seat != btn_seat
+    g.process_action(sb_seat, "call")
+
+    # BB calls
+    bb_seat = g.action_seat
+    g.process_action(bb_seat, "call")
+
+    # On flop, BTN (all-in) should be skipped
+    if g.street == Street.FLOP:
+        assert g.action_seat != btn_seat, \
+            f"All-in player (seat {btn_seat}) should not be action seat"
+        # BTN should still be in hand
+        assert g.players[btn_seat].is_in_hand, "All-in player should still be in hand"
+
+
+def test_wrong_seat_action_rejected():
+    """Actions from wrong seat must be rejected at every street."""
+    g = make_game(3)
+    g.new_hand()
+
+    streets_tested = []
+    safety = 0
+    while g.phase == GamePhase.PLAYING and safety < 40:
+        safety += 1
+        correct_seat = g.action_seat
+        current_street = g.street.value
+
+        # Try acting from every wrong seat
+        for seat in range(len(g.players)):
+            if seat != correct_seat:
+                result = g.process_action(seat, "call")
+                assert "error" in result, \
+                    f"Seat {seat} should not be able to act when it's seat {correct_seat}'s turn on {current_street}"
+
+        if current_street not in streets_tested:
+            streets_tested.append(current_street)
+
+        # Advance the game with a valid action
+        va = g.get_valid_actions(correct_seat)
+        actions = [a["action"] for a in va.get("actions", [])]
+        if "check" in actions:
+            g.process_action(correct_seat, "check")
+        elif "call" in actions:
+            g.process_action(correct_seat, "call")
+        else:
+            g.process_action(correct_seat, "fold")
+
+    # Should have tested at least preflop and flop
+    assert len(streets_tested) >= 2, f"Only tested streets: {streets_tested}"
+
+
+def test_action_seat_consistency_across_streets():
+    """action_seat should always point to a valid, active, non-folded, non-all-in player."""
+    g = make_game(4, stack=500)
+    g.new_hand()
+    safety = 0
+    while g.phase == GamePhase.PLAYING and safety < 50:
+        safety += 1
+        seat = g.action_seat
+        assert 0 <= seat < len(g.players), f"action_seat {seat} out of range"
+        player = g.players[seat]
+        assert player.is_active, f"action_seat points to inactive player (seat {seat})"
+        assert not player.is_folded, f"action_seat points to folded player (seat {seat})"
+        assert not player.is_all_in, f"action_seat points to all-in player (seat {seat})"
+        assert not player.is_sitting_out, f"action_seat points to sitting-out player (seat {seat})"
+
+        va = g.get_valid_actions(seat)
+        actions = [a["action"] for a in va.get("actions", [])]
+        if "check" in actions:
+            g.process_action(seat, "check")
+        elif "call" in actions:
+            g.process_action(seat, "call")
+        else:
+            g.process_action(seat, "fold")
+
+
+def test_busted_player_never_gets_action():
+    """A busted player (0 chips) should never be action_seat across multiple hands."""
+    g = GameState()
+    g.set_blinds(5, 10)
+    g.add_player("Rich", stack=1000)
+    g.add_player("Broke", stack=0)
+    g.add_player("Normal", stack=500)
+
+    for _ in range(3):
+        g.new_hand()
+        safety = 0
+        while g.phase == GamePhase.PLAYING and safety < 20:
+            safety += 1
+            assert g.action_seat != 1, "Busted player (seat 1) should never be action_seat"
+            g.process_action(g.action_seat, "fold")
+
+
+# ========================================================================
 # Runner
 # ========================================================================
 
