@@ -173,10 +173,7 @@
                     <div x-show="!advisorEnabled" style="padding:20px;text-align:center;color:var(--text-muted);font-size:0.85rem">
                         Advisor is disabled. Enable it in Settings or the New Game dialog.
                     </div>
-                    <div class="advisor-section" x-show="advisorEnabled && advisor" :style="advisorLoading ? 'opacity:0.5' : ''">
-                        <div x-show="advisorLoading" style="text-align:center;padding:2px;font-size:0.7rem;color:var(--blue-accent)">
-                            <span class="spinner"></span> Calculating...
-                        </div>
+                    <div class="advisor-section" x-show="advisorEnabled && advisor" :style="advisorLoading ? 'opacity:0.4;pointer-events:none' : ''">
                         <!-- Equity bar -->
                         <div class="advisor-equity" x-show="advisor?.equity">
                             <div style="display:flex;justify-content:space-between;align-items:center">

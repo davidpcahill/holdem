@@ -136,7 +136,22 @@ def _run_ai_turn():
             time.sleep(0.2)
 
         # Emit final state (it's now a human's turn or hand is over)
-        socketio.emit("state_update", _get_full_state())
+        final_state = _get_full_state()
+
+        # If it's now a human's turn, precompute advisor and include it
+        # so the frontend doesn't need a separate HTTP round-trip
+        if (game.phase == GamePhase.PLAYING
+                and game.action_seat >= 0
+                and game.action_seat < len(game.players)
+                and _game_version == my_version):
+            next_player = game.players[game.action_seat]
+            if next_player.player_type == PlayerType.HUMAN and next_player.hole_cards:
+                try:
+                    final_state["_advisor"] = _compute_advisor(next_player.seat)
+                except Exception:
+                    pass  # Non-critical
+
+        socketio.emit("state_update", final_state)
 
 
 # ──────────────────────────────────────────────
@@ -252,11 +267,20 @@ def api_action():
     # Broadcast state update
     socketio.emit("state_update", full_state)
 
-    # If next actor is AI, trigger AI processing
+    # If next actor is AI, trigger AI processing (it will push advisor when done)
     if (game.phase == GamePhase.PLAYING
             and game.action_seat >= 0
             and game.players[game.action_seat].player_type == PlayerType.AI):
         threading.Thread(target=_run_ai_turn, daemon=True).start()
+    elif (game.phase == GamePhase.PLAYING
+            and game.action_seat >= 0
+            and game.players[game.action_seat].player_type == PlayerType.HUMAN
+            and game.players[game.action_seat].hole_cards):
+        # Next actor is human — include advisor data in response
+        try:
+            result["_advisor"] = _compute_advisor(game.action_seat)
+        except Exception:
+            pass
 
     return jsonify(result)
 
@@ -266,15 +290,22 @@ def api_advisor():
     """Get advisor recommendations for a human player."""
     data = request.json or {}
     seat = data.get("seat", 0)
+    try:
+        result = _compute_advisor(seat)
+        return jsonify(result)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
 
+
+def _compute_advisor(seat: int) -> dict:
+    """Compute advisor data for a given seat. Used by API and socket push."""
     if seat >= len(game.players):
-        return jsonify({"error": "Invalid seat"}), 400
+        raise ValueError("Invalid seat")
 
     player = game.players[seat]
     if not player.hole_cards:
-        return jsonify({"error": "Player has no cards"}), 400
+        raise ValueError("Player has no cards")
 
-    # Calculate equity
     community = game.community_cards
     opponents = len([p for p in game.players if p.is_in_hand and p.seat != seat])
 
@@ -285,13 +316,11 @@ def api_advisor():
             player.hole_cards, community, opponents, simulations=5000
         )
 
-    # Get valid actions
     valid = game.get_valid_actions(seat)
     positions = game._get_positions()
     position = positions.get(seat, "")
     to_call = max(0, (game.betting_round.current_bet if game.betting_round else 0) - player.current_bet)
 
-    # Run advisor
     advice = Advisor.analyze(
         hole_cards=player.hole_cards,
         community=community,
@@ -304,7 +333,7 @@ def api_advisor():
         equity=equity,
     )
 
-    return jsonify(advice.to_dict())
+    return advice.to_dict()
 
 
 @app.route("/api/deal_card", methods=["POST"])

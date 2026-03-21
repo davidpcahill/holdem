@@ -235,9 +235,16 @@ document.addEventListener('alpine:init', () => {
             if (this.canAct) {
                 if (this.betAmount < this.raiseMin) this.betAmount = this.raiseMin;
                 if (this.betAmount > this.raiseMax) this.betAmount = this.raiseMax;
-                // Refetch on turn change, new hand, fold (changes opponent count), or missing data
-                // Debounce: skip if already loading (prevents duplicate from socket + response)
-                if (!this.advisorLoading && (turnChanged || newHand || playersChanged || !this.advisor)) {
+
+                // Check for server-pushed advisor data (piggy-backed on state_update)
+                if (data._advisor && this.advisorEnabled) {
+                    this.advisor = data._advisor;
+                    this.advisorLoading = false;
+                } else if (!this.advisorLoading && !this.advisor && this.advisorEnabled) {
+                    // Fallback: fetch via HTTP only if no data and not already loading
+                    this.fetchAdvisor();
+                } else if ((turnChanged || playersChanged) && this.advisorEnabled && !this.advisorLoading) {
+                    // Refetch if situation changed but no push data
                     this.fetchAdvisor();
                 }
                 this.checkPassPlay();
@@ -327,6 +334,11 @@ document.addEventListener('alpine:init', () => {
                 else if (action === 'check') window.pokerSounds?.check();
                 else if (action === 'call' || action === 'bet' || action === 'raise') window.pokerSounds?.chipBet();
                 if (data.state) this.updateState(data.state);
+                // Check for piggy-backed advisor data from action response
+                if (data._advisor && this.advisorEnabled) {
+                    this.advisor = data._advisor;
+                    this.advisorLoading = false;
+                }
                 if (data.showdown || data.winners) {
                     this.showdown = data;
                     window.pokerSounds?.win();
