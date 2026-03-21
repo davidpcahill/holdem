@@ -58,6 +58,7 @@ def _run_ai_turn():
     """
     Process AI player turns in sequence.
     Runs in a background thread, pushes state updates via SocketIO.
+    Only emits ai_action events — no redundant state_update emits that can race.
     """
     my_version = _game_version
     with _ai_lock:
@@ -115,13 +116,18 @@ def _run_ai_turn():
             if _game_version != my_version:
                 break
 
+            # Capture street BEFORE action (to detect street changes)
+            pre_street = game.street.value
+
             # Execute the action
             result = game.process_action(player.seat, decision.action, decision.amount)
 
-            # Emit action result
+            # Build the emit payload
             action_state = _get_full_state()
+            post_street = game.street.value
+            street_changed = pre_street != post_street and post_street not in ('showdown', 'hand_over')
 
-            # If next player is human, piggyback advisor on this emit
+            # If next player is human, piggyback advisor
             if (game.phase == GamePhase.PLAYING
                     and game.action_seat >= 0
                     and game.action_seat < len(game.players)):
@@ -132,25 +138,23 @@ def _run_ai_turn():
                     except Exception:
                         pass
 
+            # Single emit per action — the ONLY state push during AI play
             socketio.emit("ai_action", {
                 "seat": player.seat,
                 "name": player.name,
                 "decision": decision.to_dict(),
                 "result": result,
                 "state": action_state,
+                "street_changed": street_changed,
             })
 
-            # If hand ended, stop
+            # If hand ended, stop (no separate state_update — ai_action already has it)
             if game.phase != GamePhase.PLAYING:
-                socketio.emit("state_update", _get_full_state())
                 break
 
-            # Small delay between AI actions for readability
-            time.sleep(0.2)
-
-        # Emit final state as safety net (ai_action already carried the critical state)
-        # Don't include advisor here — the ai_action emit already delivered it
-        socketio.emit("state_update", _get_full_state())
+            # Pause between AI actions for readability
+            # Longer pause when street changed so frontend can show the transition
+            time.sleep(0.8 if street_changed else 0.2)
 
 
 # ──────────────────────────────────────────────

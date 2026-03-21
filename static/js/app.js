@@ -184,7 +184,18 @@ document.addEventListener('alpine:init', () => {
                     if (act === 'fold') window.pokerSounds?.fold();
                     else if (act === 'check') window.pokerSounds?.check();
                     else if (act === 'call' || act === 'bet' || act === 'raise') window.pokerSounds?.chipBet();
-                    if (data.state) this.updateState(data.state);
+
+                    if (data.street_changed && data.state) {
+                        // Street advanced: show action log immediately, delay community cards
+                        if (data.state.current_actions) this.actionLog = data.state.current_actions;
+                        setTimeout(() => {
+                            window.pokerSounds?.streetReveal();
+                            this.updateState(data.state);
+                        }, 400);
+                    } else if (data.state) {
+                        this.updateState(data.state);
+                    }
+
                     if (data.result?.showdown || data.result?.winners) {
                         this.showdown = data.result;
                         window.pokerSounds?.win();
