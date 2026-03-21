@@ -210,6 +210,7 @@ document.addEventListener('alpine:init', () => {
             if (!data) return;
             const prevActionSeat = this.state.action_seat;
             const prevHandNum = this.state.hand_number;
+            const prevInHand = (this.state.players || []).filter(p => !p.is_folded && !p.is_sitting_out).length;
 
             for (const key in data) {
                 if (data.hasOwnProperty(key)) {
@@ -223,6 +224,7 @@ document.addEventListener('alpine:init', () => {
 
             const turnChanged = this.state.action_seat !== prevActionSeat;
             const newHand = this.state.hand_number !== prevHandNum;
+            const playersChanged = (this.state.players || []).filter(p => !p.is_folded && !p.is_sitting_out).length !== prevInHand;
 
             // Reset slider on new hand or turn change
             if (turnChanged || newHand) {
@@ -232,8 +234,8 @@ document.addEventListener('alpine:init', () => {
             if (this.canAct) {
                 if (this.betAmount < this.raiseMin) this.betAmount = this.raiseMin;
                 if (this.betAmount > this.raiseMax) this.betAmount = this.raiseMax;
-                // Only fetch if turn actually changed or we don't have data yet
-                if (turnChanged || newHand || !this.advisor) {
+                // Refetch on turn change, new hand, fold (changes opponent count), or missing data
+                if (turnChanged || newHand || playersChanged || !this.advisor) {
                     this.fetchAdvisor();
                 }
                 this.checkPassPlay();
