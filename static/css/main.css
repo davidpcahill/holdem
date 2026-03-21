@@ -12,7 +12,7 @@
     grid-template-areas:
         "topbar  topbar"
         "main    sidebar"
-        "actions actions";
+        "actions sidebar";
     height: 100vh;
     width: 100vw;
     overflow: hidden;
@@ -23,7 +23,7 @@
     grid-template-areas:
         "topbar  topbar  topbar"
         "main    picker  sidebar"
-        "actions actions actions";
+        "actions picker  sidebar";
 }
 
 /* ── Top Bar ── */
@@ -364,22 +364,21 @@
 .advisor-stat-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 8px;
+    gap: 4px;
 }
 .advisor-stat {
     background: var(--bg-tertiary);
-    border-radius: var(--radius-md);
-    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    padding: 4px 8px;
 }
 .advisor-stat-label {
-    font-size: 0.7rem;
+    font-size: 0.65rem;
     color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.3px;
-    margin-bottom: 2px;
 }
 .advisor-stat-value {
-    font-size: 1rem;
+    font-size: 0.9rem;
     font-weight: 700;
     font-family: var(--font-mono);
 }
@@ -391,14 +390,14 @@
 .advisor-actions {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 4px;
 }
 .advisor-action-item {
     display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 8px 10px;
-    border-radius: var(--radius-md);
+    align-items: flex-start;
+    gap: 6px;
+    padding: 5px 8px;
+    border-radius: var(--radius-sm);
     background: var(--bg-tertiary);
     border: 1px solid transparent;
     transition: all var(--transition-fast);

@@ -1,10 +1,20 @@
 # Texas Hold'em Poker Advisor & Simulator
 
+## Screenshots
+
+![New Game screenshot](documentation/images/newgame.png)
+![Playfield screenshot](documentation/images/playfield.png)
+
+## Description
+
 A local web-based Texas Hold'em game with AI opponents and a real-time strategy advisor. Play practice games against configurable AI, or use Card Picker mode as a cheat sheet during live games — enter the cards being dealt in real life and get instant equity, outs, pot odds, and action recommendations.
 
 Built with Python/Flask backend and vanilla JS frontend. No databases, no accounts, no external dependencies beyond Flask. Runs entirely on your machine.
 
 ![Python](https://img.shields.io/badge/Python-3.10+-blue) ![Flask](https://img.shields.io/badge/Flask-3.0+-green) ![Tests](https://img.shields.io/badge/Tests-83%20passing-brightgreen)
+
+![New Game screenshot](documentation/images/newgame.png)
+![Game screenshot](documentation/images/game.png)
 
 ## Quick Start
 

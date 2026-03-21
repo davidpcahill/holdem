@@ -174,13 +174,14 @@
                         Advisor is disabled. Enable it in Settings or the New Game dialog.
                     </div>
                     <div class="advisor-section" x-show="advisorEnabled && advisor" :style="advisorLoading ? 'opacity:0.5' : ''">
-                        <div x-show="advisorLoading" style="text-align:center;padding:4px;font-size:0.75rem;color:var(--blue-accent)">
+                        <div x-show="advisorLoading" style="text-align:center;padding:2px;font-size:0.7rem;color:var(--blue-accent)">
                             <span class="spinner"></span> Calculating...
                         </div>
+                        <!-- Equity bar -->
                         <div class="advisor-equity" x-show="advisor?.equity">
                             <div style="display:flex;justify-content:space-between;align-items:center">
-                                <span style="font-weight:600;font-size:0.85rem" title="Your probability of winning based on simulated outcomes">Equity</span>
-                                <span style="font-size:0.7rem;color:var(--text-muted)" x-text="advisor?.equity?.is_preflop?'Preflop lookup':(advisor?.equity?.simulations||0)+' simulations'"></span>
+                                <span style="font-weight:600;font-size:0.8rem" title="Win probability from Monte Carlo simulation">Equity</span>
+                                <span style="font-size:0.65rem;color:var(--text-muted)" x-text="advisor?.equity?.is_preflop?'Preflop lookup':(advisor?.equity?.simulations||0)+' sims'"></span>
                             </div>
                             <div class="equity-bar">
                                 <div class="eq-win" :style="'width:'+(advisor?.equity?.win||0)+'%'"></div>
@@ -193,27 +194,25 @@
                                 <span class="eq-label-loss" x-text="'Loss '+(advisor?.equity?.loss||0).toFixed(1)+'%'"></span>
                             </div>
                         </div>
-                        <!-- Current Hand with mini cards -->
-                        <div x-show="advisor?.hand_name" style="padding:6px 0">
-                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-                                <span style="font-size:0.8rem;color:var(--text-muted)">Best Hand</span>
-                                <span style="font-weight:700;color:var(--gold);font-size:0.85rem" x-text="advisor?.hand_name||''"></span>
-                            </div>
-                            <div x-show="advisor?.best_hand_cards?.length" style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
-                                <template x-for="bhc in (advisor?.best_hand_cards||[])" :key="'bh_'+bhc.short">
-                                    <span style="display:inline-flex;align-items:center;padding:2px 5px;border-radius:3px;font-size:0.8rem;font-weight:700;font-family:var(--font-mono);border:1px solid var(--border-default);background:var(--bg-tertiary)"
-                                          :style="bhc.is_red ? 'color:var(--card-red)' : 'color:var(--text-primary)'"
-                                          x-text="bhc.rank_display + bhc.suit_symbol"></span>
-                                </template>
-                            </div>
+                        <!-- Best Hand: single line with colored cards + name -->
+                        <div x-show="advisor?.hand_name" style="padding:4px 0;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                            <span style="font-size:0.75rem;color:var(--text-muted);flex-shrink:0">Best Hand</span>
+                            <template x-for="bhc in (advisor?.best_hand_cards||[])" :key="'bh_'+bhc.short">
+                                <span style="font-size:0.75rem;font-weight:700;font-family:var(--font-mono)"
+                                      :style="bhc.is_red ? 'color:var(--card-red)' : 'color:var(--text-primary)'"
+                                      x-text="bhc.rank_display + bhc.suit_symbol"></span>
+                            </template>
+                            <span x-show="advisor?.hand_rank !== 'PREFLOP'" style="font-size:0.7rem;color:var(--gold);margin-left:auto;flex-shrink:0" x-text="'[' + (advisor?.hand_name||'') + ']'"></span>
                         </div>
-                        <div style="font-size:0.75rem;color:var(--text-secondary);padding-bottom:4px" x-show="advisor?.draw_description && advisor?.draw_description !== advisor?.hand_name" x-text="advisor?.draw_description"></div>
+                        <!-- Draw description -->
+                        <div style="font-size:0.7rem;color:var(--text-secondary);padding-bottom:2px" x-show="advisor?.draw_description && advisor?.draw_description !== advisor?.hand_name" x-text="advisor?.draw_description"></div>
+                        <!-- Stats: 2×2 compact grid -->
                         <div class="advisor-stat-grid">
-                            <div class="advisor-stat" title="Pot Odds — Call cost ÷ (pot + call). The equity needed for a profitable call.">
+                            <div class="advisor-stat" title="Pot Odds — Call cost ÷ (pot + call). Equity needed to call profitably.">
                                 <div class="advisor-stat-label">Pot Odds</div>
                                 <div class="advisor-stat-value" :class="advisor?.pot_odds<(advisor?.equity?.win||0)?'positive':'negative'" x-text="advisor?.pot_odds_ratio||'—'"></div>
                             </div>
-                            <div class="advisor-stat" title="Stack-to-Pot Ratio — Your stack ÷ pot. Under 3 = pot committed. 3-8 = medium. Over 8 = deep.">
+                            <div class="advisor-stat" title="Stack-to-Pot Ratio — Stack ÷ pot. Under 3 = committed. 3-8 = medium. Over 8 = deep.">
                                 <div class="advisor-stat-label">SPR</div>
                                 <div class="advisor-stat-value" :class="advisor?.spr<3?'negative':(advisor?.spr<8?'neutral':'positive')" x-text="advisor?.spr?.toFixed(1)||'—'"></div>
                             </div>
@@ -221,41 +220,42 @@
                                 <div class="advisor-stat-label">Edge</div>
                                 <div class="advisor-stat-value" :class="(advisor?.equity_edge||0)>0?'positive':'negative'" x-text="(advisor?.equity_edge>0?'+':'')+(advisor?.equity_edge?.toFixed(1)||'0')+'%'"></div>
                             </div>
-                            <div class="advisor-stat" title="Fold Equity — Estimated probability opponents fold to your bet. Higher in late position.">
+                            <div class="advisor-stat" title="Fold Equity — Probability opponents fold to your bet.">
                                 <div class="advisor-stat-label">Fold Eq.</div>
                                 <div class="advisor-stat-value neutral" x-text="(advisor?.fold_equity?.toFixed(0)||'0')+'%'"></div>
                             </div>
                         </div>
-                        <div x-show="advisor?.outs && advisor.outs.count>0" style="padding:6px 0">
-                            <div style="display:flex;justify-content:space-between;align-items:baseline">
-                                <span style="font-size:0.8rem;color:var(--text-muted)" title="Outs — Cards that improve your hand">Outs</span>
-                                <span style="font-weight:700;color:var(--gold)" x-text="advisor?.outs?.count||0"></span>
-                            </div>
-                            <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:2px" x-text="(advisor?.outs?.draws||[]).join(', ')"></div>
-                            <div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px" x-text="'Hit: '+(advisor?.outs?.hit_either_pct?.toFixed(1)||'0')+'% by river'"></div>
+                        <!-- Outs (compact) -->
+                        <div x-show="advisor?.outs && advisor.outs.count>0" style="padding:3px 0;font-size:0.75rem;color:var(--text-secondary)"
+                             :title="'Cards that will improve your hand. ' + (advisor?.outs?.draws||[]).join(', ')">
+                            <span style="color:var(--gold);font-weight:700" x-text="advisor?.outs?.count||0"></span> outs
+                            <span x-text="(advisor?.outs?.draws||[]).length ? '(' + (advisor?.outs?.draws||[]).join(', ') + ')' : ''"></span>
+                            — <span x-text="(advisor?.outs?.hit_either_pct?.toFixed(1)||'0') + '% by river'"></span>
                         </div>
+                        <!-- Recommendations with inline bet range -->
                         <div class="advisor-actions" x-show="advisor?.actions?.length">
-                            <div style="font-weight:600;font-size:0.8rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.3px;margin-top:4px">
-                                Recommendations <span style="font-size:0.65rem;color:var(--text-muted);text-transform:none">(sorted by expected value)</span>
+                            <div style="font-weight:600;font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.3px;margin-top:2px">
+                                Recommendations
                             </div>
                             <template x-for="(rec,idx) in (advisor?.actions||[])" :key="'r'+idx">
                                 <div class="advisor-action-item" :class="{'top-action':idx===0}" :title="rec.reasoning">
-                                    <span style="font-size:0.7rem;color:var(--text-muted);min-width:14px" x-text="idx===0?'★':(idx+1)"></span>
-                                    <span class="action-name" x-text="rec.action.toUpperCase()"></span>
-                                    <div class="action-score-bar"><div class="fill" :style="'width:'+rec.score+'%'" :class="idx===0?'fill-green':'fill-gold'"></div></div>
-                                    <span class="action-ev" :class="rec.ev>=0?'positive':'negative'"
-                                          x-text="'EV ' + (rec.ev>=0?'+':'') + rec.ev.toFixed(0)"
-                                          title="Expected Value: estimated chip profit/loss from this action"></span>
-                                    <span class="action-label" x-text="rec.label" style="font-size:0.65rem"></span>
+                                    <span style="font-size:0.65rem;color:var(--text-muted);min-width:12px" x-text="idx===0?'★':(idx+1)"></span>
+                                    <div style="flex:1;min-width:0">
+                                        <div style="display:flex;align-items:center;gap:6px">
+                                            <span class="action-name" x-text="rec.action.toUpperCase()" style="font-size:0.8rem"></span>
+                                            <div class="action-score-bar" style="flex:1"><div class="fill" :style="'width:'+rec.score+'%'" :class="idx===0?'fill-green':'fill-gold'"></div></div>
+                                            <span class="action-ev" :class="rec.ev>=0?'positive':'negative'" style="font-size:0.75rem"
+                                                  x-text="'EV '+(rec.ev>=0?'+':'')+rec.ev.toFixed(0)"></span>
+                                        </div>
+                                        <!-- Inline bet range for raise/bet actions -->
+                                        <div x-show="rec.bet_range" style="font-size:0.65rem;color:var(--gold);font-family:var(--font-mono);margin-top:1px;padding-left:2px">
+                                            <span x-text="rec.label"></span>
+                                            · $<span x-text="rec.bet_range?.[0]||''"></span>–$<span x-text="rec.bet_range?.[1]||''"></span>
+                                        </div>
+                                        <div x-show="!rec.bet_range" style="font-size:0.65rem;color:var(--text-muted);margin-top:1px;padding-left:2px" x-text="rec.label"></div>
+                                    </div>
                                 </div>
                             </template>
-                        </div>
-                        <div x-show="advisor?.top_action?.bet_range" style="padding:8px 0">
-                            <div style="font-size:0.8rem;color:var(--text-muted)">Suggested Bet</div>
-                            <div style="font-weight:700;font-family:var(--font-mono);color:var(--gold)">
-                                $<span x-text="advisor?.top_action?.bet_range?.[0]||''"></span> — $<span x-text="advisor?.top_action?.bet_range?.[1]||''"></span>
-                                <span class="badge" :class="advisor?.top_action?.bet_type==='value'?'badge-green':(advisor?.top_action?.bet_type==='bluff'?'badge-red':'badge-gold')" x-text="advisor?.top_action?.bet_type||''" :title="betTypeTooltip(advisor?.top_action?.bet_type)" style="margin-left:6px"></span>
-                            </div>
                         </div>
                     </div>
                     <div x-show="advisorEnabled && !advisor" style="padding:20px;text-align:center;color:var(--text-muted);font-size:0.85rem">

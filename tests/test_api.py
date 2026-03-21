@@ -306,7 +306,7 @@ def test_html_features():
             'sounds.js', 'toggleSound', 'editingPlayer', 'openPlayerEditor',
             'passPlayActive', 'hideHands', 'assignPickerCard', 'historyList',
             'sidebar-open', 'shouldShowCards', 'copyHistory', 'downloadHistory',
-            'betTypeTooltip', 'positionTooltip', 'formatAIStyle',
+            'positionTooltip', 'formatAIStyle', 'advisorEnabled',
         ]
         missing = [f for f in features if f not in html]
         assert not missing, f'Missing HTML features: {missing}'

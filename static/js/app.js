@@ -36,6 +36,7 @@ document.addEventListener('alpine:init', () => {
         editingPlayer: null,
         advisorLoading: false,
         advisorEnabled: true,
+        _advisorFetchId: 0,
 
         // Street tracking for sounds
         _lastStreet: '',
@@ -202,12 +203,16 @@ document.addEventListener('alpine:init', () => {
             if (this.canAct) {
                 if (this.betAmount < this.raiseMin) this.betAmount = this.raiseMin;
                 if (this.betAmount > this.raiseMax) this.betAmount = this.raiseMax;
-                this.fetchAdvisor();
+                // Only fetch if turn actually changed or we don't have data yet
+                if (turnChanged || newHand || !this.advisor) {
+                    this.fetchAdvisor();
+                }
                 this.checkPassPlay();
             } else {
+                // Always clear loading state when not our turn
+                this.advisor = null;
+                this.advisorLoading = false;
                 if (this.state.phase !== 'playing') {
-                    this.advisor = null;
-                    this.advisorLoading = false;
                     this.lastHumanSeat = -1;
                 }
             }
@@ -240,11 +245,21 @@ document.addEventListener('alpine:init', () => {
                 });
                 const data = await res.json();
                 if (data.ok) {
-                    this.updateState(data.state);
-                    this.showSetup = false;
+                    // Hard reset all UI state
                     this.showdown = null;
                     this.advisor = null;
+                    this.advisorLoading = false;
+                    this._advisorFetchId++;  // Invalidate any in-flight advisor fetches
                     this.actionLog = [];
+                    this.aiThinkingSeat = -1;
+                    this._lastStreet = '';
+                    this._lastHandNum = 0;
+                    this.lastHumanSeat = -1;
+                    this.passPlayActive = false;
+                    this.cancelAutoAdvance();
+                    // Apply server state
+                    this.updateState(data.state);
+                    this.showSetup = false;
                 }
             } catch (e) { console.error('Start game failed:', e); }
         },
@@ -308,10 +323,12 @@ document.addEventListener('alpine:init', () => {
             if (!this.canAct || !this.advisorEnabled) {
                 if (!this.advisorEnabled) {
                     this.advisor = null;
-                    this.advisorLoading = false;
                 }
+                this.advisorLoading = false;
                 return;
             }
+            // Generation counter: ignore responses from stale fetches
+            const fetchId = ++this._advisorFetchId;
             this.advisorLoading = true;
             try {
                 const res = await fetch('/api/advisor', {
@@ -320,12 +337,18 @@ document.addEventListener('alpine:init', () => {
                     body: JSON.stringify({ seat: this.state.action_seat }),
                 });
                 const data = await res.json();
+                // Drop result if a newer fetch was started while we were waiting
+                if (fetchId !== this._advisorFetchId) return;
                 if (!data.error) {
                     this.advisor = data;
-                    // Don't auto-position slider — visual range indicator shows recommendation instead
                 }
-            } catch (e) { console.error('Advisor failed:', e); }
-            this.advisorLoading = false;
+            } catch (e) {
+                if (fetchId !== this._advisorFetchId) return;
+                console.error('Advisor failed:', e);
+            }
+            if (fetchId === this._advisorFetchId) {
+                this.advisorLoading = false;
+            }
         },
 
         sliderRecommendStyle() {

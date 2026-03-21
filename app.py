@@ -166,6 +166,9 @@ def api_new_game():
     _game_version += 1
     game = GameState()
 
+    # Explicitly reset manual deal
+    game.manual_deal = False
+
     # Set blinds
     sb = data.get("small_blind", 5)
     bb = data.get("big_blind", 10)
@@ -202,7 +205,10 @@ def api_new_game():
         variance=settings.get("variance", 30) / 100.0,
     )
 
-    return jsonify({"ok": True, "state": _get_full_state()})
+    full_state = _get_full_state()
+    # Push state to all socket clients to clear stale data
+    socketio.emit("state_update", full_state)
+    return jsonify({"ok": True, "state": full_state})
 
 
 @app.route("/api/new_hand", methods=["POST"])

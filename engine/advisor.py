@@ -264,12 +264,14 @@ class Advisor:
         outs = 0
         draws = []
 
-        # Test each remaining card to see if it improves the hand
+        # Test each remaining card: only count if it improves hand RANK
+        # (e.g., high card → pair, pair → two pair), not just kicker improvements
         improving_cards = []
         for card in remaining:
             test_cards = all_cards + [card]
             new_result = HandEvaluator.evaluate(test_cards)
-            if new_result.score > current.score:
+            # Must improve by at least one hand rank category
+            if new_result.rank > current.rank:
                 improving_cards.append(card)
 
         outs = len(improving_cards)
@@ -283,12 +285,14 @@ class Advisor:
 
         ranks = sorted(set(c.rank for c in all_cards))
         # Open-ended straight draw
+        found_oesd = False
         for i in range(len(ranks) - 3):
             window = ranks[i:i+4]
             if window[-1] - window[0] == 3:
                 draws.append("Open-ended straight draw")
+                found_oesd = True
                 break
-        else:
+        if not found_oesd:
             # Gutshot
             for i in range(len(ranks) - 3):
                 window = ranks[i:i+4]
@@ -300,8 +304,10 @@ class Advisor:
         if current.rank == HandRank.HIGH_CARD and community:
             board_high = max(c.rank for c in community)
             overcards = sum(1 for c in hole_cards if c.rank > board_high)
-            if overcards > 0:
-                draws.append(f"{overcards} overcard(s)")
+            if overcards == 1:
+                draws.append("1 overcard")
+            elif overcards > 1:
+                draws.append(f"{overcards} overcards")
 
         # Calculate hit probabilities
         unseen = 52 - len(used)
