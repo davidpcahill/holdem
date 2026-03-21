@@ -508,6 +508,36 @@ def test_four_player_side_pots():
     assert sum(p.amount for p in pots) == 375
 
 
+def test_undo_hand_removes_history():
+    """Undo hand after completion should remove the history entry."""
+    g = make_game(2, stack=500, sb=5, bb=10)
+    g.new_hand()
+    # Fold immediately to end hand
+    seat = g.action_seat
+    g.process_action(seat, "fold")
+    assert g.phase == GamePhase.BETWEEN_HANDS
+    assert len(g.hand_histories) == 1
+
+    g.undo_hand()
+    assert len(g.hand_histories) == 0, f"Expected 0 histories after undo, got {len(g.hand_histories)}"
+    assert g.phase == GamePhase.BETWEEN_HANDS
+    assert g.hand_number == 0
+
+
+def test_undo_hand_mid_hand_no_history_change():
+    """Undo hand mid-hand should not crash and history should stay empty."""
+    g = make_game(2, stack=500, sb=5, bb=10)
+    g.new_hand()
+    # Take one action but don't finish hand
+    seat = g.action_seat
+    g.process_action(seat, "call")
+    assert len(g.hand_histories) == 0
+
+    g.undo_hand()
+    assert len(g.hand_histories) == 0
+    assert g.phase == GamePhase.BETWEEN_HANDS
+
+
 def test_side_pot_chips_not_lost_when_eligible_fold():
     """When all eligible players for a side pot have folded, chips should carry forward."""
     # Scenario: 3 players. Player 0 goes all-in for 50. Player 1 raises to 100.

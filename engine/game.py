@@ -684,6 +684,9 @@ class GameState:
         """Undo to the start of the current hand."""
         if self._hand_start_snapshot is None:
             return {"error": "No hand to undo"}
+        # Remove history entry if the hand was completed and logged
+        if self.hand_histories and self.hand_histories[-1].hand_number == self.hand_number:
+            self.hand_histories.pop()
         self._restore_snapshot(self._hand_start_snapshot)
         self._undo_stack = []
         self.phase = GamePhase.BETWEEN_HANDS
