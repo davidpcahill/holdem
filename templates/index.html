@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Texas Hold'em — Advisor & Simulator</title>
+    <link rel="stylesheet" href="/static/css/theme.css">
+    <link rel="stylesheet" href="/static/css/cards.css">
+    <link rel="stylesheet" href="/static/css/main.css">
+    <link rel="stylesheet" href="/static/css/animations.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>[x-cloak] { display: none !important; }</style>
+</head>
+<body>
+    <div id="app" x-data="pokerApp" x-cloak tabindex="0" @keydown.window="handleKey($event)">
+
+        <!-- TOP BAR -->
+        <header class="topbar">
+            <div class="topbar-brand">♠ Hold'em</div>
+            <div class="topbar-info">
+                <div class="info-item">
+                    <span class="info-label">Hand</span>
+                    <span class="info-value" x-text="state.hand_number || '—'"></span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Blinds</span>
+                    <span class="info-value" x-text="state.small_blind + '/' + state.big_blind"></span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Street</span>
+                    <span class="info-value" x-text="streetDisplay"></span>
+                </div>
+                <div class="info-item" x-show="state.phase === 'playing' && state.action_seat >= 0">
+                    <span class="info-label">Acting</span>
+                    <span class="info-value" x-text="state.players?.[state.action_seat]?.name || ''"></span>
+                </div>
+            </div>
+            <div class="topbar-spacer"></div>
+            <div class="topbar-actions">
+                <button class="btn btn-sm" @click="showSetup = true" title="Configure a new game">New Game</button>
+                <button class="btn btn-sm btn-primary" @click="newHand()" :disabled="!state.can_start_hand">New Hand <span class="kbd">N</span></button>
+                <button class="btn btn-sm" @click="undoAction()" :disabled="state.phase !== 'playing'" title="Undo the last action">Undo <span class="kbd">Z</span></button>
+                <button class="btn btn-sm" :class="{'btn-gold': state.manual_deal}" @click="toggleManualDeal()" title="Card Picker: assign real cards to get advisor recommendations">🃏 Picker</button>
+                <button class="btn btn-sm" :class="{'btn-gold': hideHands}" @click="hideHands = !hideHands"
+                        title="Hide Hands: enable pass-and-play mode where each player's cards are hidden until their turn">
+                    <span x-text="hideHands ? '👁️‍🗨️' : '👁️'"></span>
+                </button>
+                <button class="btn btn-sm btn-icon sidebar-toggle-btn" @click="mobileSidebar = !mobileSidebar" title="Toggle sidebar">☰</button>
+                <button class="btn btn-sm btn-icon" @click="toggleSound()" :title="soundEnabled ? 'Mute sound effects' : 'Enable sound effects'">
+                    <span x-text="soundEnabled ? '🔊' : '🔇'"></span>
+                </button>
+            </div>
+        </header>
+
+        <!-- MAIN AREA -->
+        <main class="main-area">
+            <!-- Community Cards -->
+            <div class="community-section">
+                <div class="community-header">
+                    <span class="community-street" x-text="streetDisplay"></span>
+                    <div class="community-pot"><span class="pot-icon">💰</span> <span x-text="'$' + state.pot"></span></div>
+                </div>
+                <div class="community-cards">
+                    <template x-for="i in 5" :key="'cc'+i">
+                        <template x-if="state.community_cards?.[i-1]">
+                            <div class="playing-card dealing" :class="state.community_cards[i-1].is_red ? 'red' : 'black'"
+                                 @click="state.manual_deal && unassignCard(state.community_cards[i-1].short, 'community')">
+                                <span class="card-rank-tl" x-text="state.community_cards[i-1].rank_display"></span>
+                                <span class="card-suit-tl" x-text="state.community_cards[i-1].suit_symbol"></span>
+                                <span class="card-suit-center" x-text="state.community_cards[i-1].suit_symbol"></span>
+                                <span class="card-rank-br" x-text="state.community_cards[i-1].rank_display"></span>
+                                <span class="card-suit-br" x-text="state.community_cards[i-1].suit_symbol"></span>
+                            </div>
+                        </template>
+                        <template x-if="!state.community_cards?.[i-1]">
+                            <div class="card-slot-empty" @click="state.manual_deal && (pickerTarget = 'community')"></div>
+                        </template>
+                    </template>
+                </div>
+                <div class="burn-pile" x-show="state.burned_cards > 0"><span x-text="'Burned: ' + state.burned_cards"></span></div>
+            </div>
+
+            <!-- Players Grid -->
+            <div class="players-section">
+                <template x-for="player in state.players" :key="'ps'+player.seat">
+                    <div class="player-seat" :class="{'active-turn': state.action_seat===player.seat && state.phase==='playing', 'folded': player.is_folded, 'all-in': player.is_all_in, 'winner': isWinner(player.seat), 'ai-thinking': aiThinkingSeat===player.seat, 'editable': state.phase !== 'playing'}"
+                         :style="'border-left:3px solid '+player.color"
+                         @click="state.manual_deal && (pickerTarget='player_'+player.seat)"
+                         @dblclick.prevent="openPlayerEditor(player.seat)"
+                         :title="state.phase !== 'playing' ? 'Double-click to edit player' : ''"
+                         >>
+                        <div class="seat-header">
+                            <div class="seat-name">
+                                <span x-text="player.name"></span>
+                                <span class="seat-type-icon" x-text="player.player_type==='ai'?'🤖':'👤'" :title="player.player_type==='ai'?'AI — '+formatAIStyle(player.ai_style):'Human'"></span>
+                                <span class="spinner" x-show="aiThinkingSeat===player.seat"></span>
+                            </div>
+                            <div class="seat-badges">
+                                <span class="badge badge-gold" x-show="state.positions?.[player.seat]" x-text="state.positions?.[player.seat]||''" :title="positionTooltip(state.positions?.[player.seat]||'')"></span>
+                            </div>
+                        </div>
+                        <div class="seat-stack">$<span class="seat-stack-value" x-text="player.stack.toLocaleString()"></span></div>
+                        <div class="seat-cards">
+                            <template x-if="shouldShowCards(player)">
+                                <template x-for="card in player.hole_cards" :key="card.short">
+                                    <div class="playing-card sm dealing" :class="[card.is_red?'red':'black', isWinnerCard(player.seat,card)?'winner-card':'']"
+                                         @click.stop="state.manual_deal && unassignCard(card.short,'player',player.seat)">
+                                        <span class="card-rank-tl" x-text="card.rank_display"></span>
+                                        <span class="card-suit-tl" x-text="card.suit_symbol"></span>
+                                        <span class="card-suit-center" x-text="card.suit_symbol"></span>
+                                        <span class="card-rank-br" x-text="card.rank_display"></span>
+                                        <span class="card-suit-br" x-text="card.suit_symbol"></span>
+                                    </div>
+                                </template>
+                            </template>
+                            <template x-if="!shouldShowCards(player) && (player.has_cards || (player.hole_cards && player.hole_cards.length > 0))">
+                                <template x-for="i in 2" :key="'fb'+player.seat+i">
+                                    <div class="playing-card sm card-back"></div>
+                                </template>
+                            </template>
+                        </div>
+                        <div class="seat-status">
+                            <span class="seat-action-label" :class="'action-'+getLastAction(player.seat)" x-text="getLastActionDisplay(player.seat)" x-show="getLastAction(player.seat)"></span>
+                            <span class="seat-bet-amount" x-show="player.current_bet>0" x-text="'$'+player.current_bet"></span>
+                            <span x-show="player.is_all_in" class="badge badge-red" style="margin-left:auto">ALL IN</span>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </main>
+
+        <!-- CARD PICKER (middle column, between main and sidebar) -->
+        <div class="card-picker-column" x-show="state.manual_deal" x-cloak>
+            <div style="padding:8px 6px;border-bottom:1px solid var(--border-default);font-weight:600;font-size:0.75rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.3px">Picker</div>
+            <div style="padding:6px">
+                <select style="font-size:0.7rem;padding:2px 4px;width:100%;margin-bottom:6px" x-model="pickerTarget">
+                    <option value="community">Community</option>
+                    <template x-for="p in state.players" :key="'pt'+p.seat">
+                        <option :value="'player_' + p.seat" x-text="p.name"></option>
+                    </template>
+                </select>
+                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:2px">
+                    <div style="text-align:center;font-size:0.7rem;font-weight:700">♠</div>
+                    <div style="text-align:center;font-size:0.7rem;font-weight:700;color:var(--card-red)">♥</div>
+                    <div style="text-align:center;font-size:0.7rem;font-weight:700;color:var(--card-red)">♦</div>
+                    <div style="text-align:center;font-size:0.7rem;font-weight:700">♣</div>
+                    <template x-for="rank in ['A','K','Q','J','T','9','8','7','6','5','4','3','2']" :key="'pr_'+rank">
+                        <template x-for="suit in [{l:'s',s:'♠',red:false},{l:'h',s:'♥',red:true},{l:'d',s:'♦',red:true},{l:'c',s:'♣',red:false}]" :key="rank+suit.l">
+                            <div @click="!isCardUsed(rank+suit.l) && assignPickerCard(rank+suit.l)"
+                                 :class="isCardUsed(rank+suit.l) ? 'picker-card used' : 'picker-card'"
+                                 :style="suit.red ? 'color:var(--card-red)' : ''">
+                                <span x-text="(rank==='T'?'10':rank) + suit.s"></span>
+                            </div>
+                        </template>
+                    </template>
+                </div>
+                <div style="font-size:0.55rem;color:var(--text-muted);margin-top:4px;line-height:1.2">Click to assign. Click table cards to remove.</div>
+            </div>
+        </div>
+
+        <!-- SIDEBAR -->
+        <aside class="sidebar" :class="{'sidebar-open': mobileSidebar}">
+            <div class="sidebar-tabs">
+                <div class="sidebar-tab" :class="{active:sidebarTab==='advisor'}" @click="sidebarTab='advisor'">Advisor</div>
+                <div class="sidebar-tab" :class="{active:sidebarTab==='log'}" @click="sidebarTab='log'">Log</div>
+                <div class="sidebar-tab" :class="{active:sidebarTab==='settings'}" @click="sidebarTab='settings'">Settings</div>
+            </div>
+            <div class="sidebar-content">
+                <!-- Advisor -->
+                <div class="sidebar-panel" :class="{active:sidebarTab==='advisor'}">
+                    <!-- Advisor disabled message -->
+                    <div x-show="!advisorEnabled" style="padding:20px;text-align:center;color:var(--text-muted);font-size:0.85rem">
+                        Advisor is disabled. Enable it in Settings or the New Game dialog.
+                    </div>
+                    <div class="advisor-section" x-show="advisorEnabled && advisor" :style="advisorLoading ? 'opacity:0.5' : ''">
+                        <div x-show="advisorLoading" style="text-align:center;padding:4px;font-size:0.75rem;color:var(--blue-accent)">
+                            <span class="spinner"></span> Calculating...
+                        </div>
+                        <div class="advisor-equity" x-show="advisor?.equity">
+                            <div style="display:flex;justify-content:space-between;align-items:center">
+                                <span style="font-weight:600;font-size:0.85rem" title="Your probability of winning based on simulated outcomes">Equity</span>
+                                <span style="font-size:0.7rem;color:var(--text-muted)" x-text="advisor?.equity?.is_preflop?'Preflop lookup':(advisor?.equity?.simulations||0)+' simulations'"></span>
+                            </div>
+                            <div class="equity-bar">
+                                <div class="eq-win" :style="'width:'+(advisor?.equity?.win||0)+'%'"></div>
+                                <div class="eq-tie" :style="'width:'+(advisor?.equity?.tie||0)+'%'"></div>
+                                <div class="eq-loss" :style="'width:'+(advisor?.equity?.loss||0)+'%'"></div>
+                            </div>
+                            <div class="equity-labels">
+                                <span class="eq-label-win" x-text="'Win '+(advisor?.equity?.win||0).toFixed(1)+'%'"></span>
+                                <span class="eq-label-tie" x-text="'Tie '+(advisor?.equity?.tie||0).toFixed(1)+'%'"></span>
+                                <span class="eq-label-loss" x-text="'Loss '+(advisor?.equity?.loss||0).toFixed(1)+'%'"></span>
+                            </div>
+                        </div>
+                        <!-- Current Hand with mini cards -->
+                        <div x-show="advisor?.hand_name" style="padding:6px 0">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                                <span style="font-size:0.8rem;color:var(--text-muted)">Best Hand</span>
+                                <span style="font-weight:700;color:var(--gold);font-size:0.85rem" x-text="advisor?.hand_name||''"></span>
+                            </div>
+                            <div x-show="advisor?.best_hand_cards?.length" style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
+                                <template x-for="bhc in (advisor?.best_hand_cards||[])" :key="'bh_'+bhc.short">
+                                    <span style="display:inline-flex;align-items:center;padding:2px 5px;border-radius:3px;font-size:0.8rem;font-weight:700;font-family:var(--font-mono);border:1px solid var(--border-default);background:var(--bg-tertiary)"
+                                          :style="bhc.is_red ? 'color:var(--card-red)' : 'color:var(--text-primary)'"
+                                          x-text="bhc.rank_display + bhc.suit_symbol"></span>
+                                </template>
+                            </div>
+                        </div>
+                        <div style="font-size:0.75rem;color:var(--text-secondary);padding-bottom:4px" x-show="advisor?.draw_description && advisor?.draw_description !== advisor?.hand_name" x-text="advisor?.draw_description"></div>
+                        <div class="advisor-stat-grid">
+                            <div class="advisor-stat" title="Pot Odds — Call cost ÷ (pot + call). The equity needed for a profitable call.">
+                                <div class="advisor-stat-label">Pot Odds</div>
+                                <div class="advisor-stat-value" :class="advisor?.pot_odds<(advisor?.equity?.win||0)?'positive':'negative'" x-text="advisor?.pot_odds_ratio||'—'"></div>
+                            </div>
+                            <div class="advisor-stat" title="Stack-to-Pot Ratio — Your stack ÷ pot. Under 3 = pot committed. 3-8 = medium. Over 8 = deep.">
+                                <div class="advisor-stat-label">SPR</div>
+                                <div class="advisor-stat-value" :class="advisor?.spr<3?'negative':(advisor?.spr<8?'neutral':'positive')" x-text="advisor?.spr?.toFixed(1)||'—'"></div>
+                            </div>
+                            <div class="advisor-stat" title="Equity Edge — Your win% minus pot odds%. Positive = profitable call.">
+                                <div class="advisor-stat-label">Edge</div>
+                                <div class="advisor-stat-value" :class="(advisor?.equity_edge||0)>0?'positive':'negative'" x-text="(advisor?.equity_edge>0?'+':'')+(advisor?.equity_edge?.toFixed(1)||'0')+'%'"></div>
+                            </div>
+                            <div class="advisor-stat" title="Fold Equity — Estimated probability opponents fold to your bet. Higher in late position.">
+                                <div class="advisor-stat-label">Fold Eq.</div>
+                                <div class="advisor-stat-value neutral" x-text="(advisor?.fold_equity?.toFixed(0)||'0')+'%'"></div>
+                            </div>
+                        </div>
+                        <div x-show="advisor?.outs && advisor.outs.count>0" style="padding:6px 0">
+                            <div style="display:flex;justify-content:space-between;align-items:baseline">
+                                <span style="font-size:0.8rem;color:var(--text-muted)" title="Outs — Cards that improve your hand">Outs</span>
+                                <span style="font-weight:700;color:var(--gold)" x-text="advisor?.outs?.count||0"></span>
+                            </div>
+                            <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:2px" x-text="(advisor?.outs?.draws||[]).join(', ')"></div>
+                            <div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px" x-text="'Hit: '+(advisor?.outs?.hit_either_pct?.toFixed(1)||'0')+'% by river'"></div>
+                        </div>
+                        <div class="advisor-actions" x-show="advisor?.actions?.length">
+                            <div style="font-weight:600;font-size:0.8rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.3px;margin-top:4px">
+                                Recommendations <span style="font-size:0.65rem;color:var(--text-muted);text-transform:none">(sorted by expected value)</span>
+                            </div>
+                            <template x-for="(rec,idx) in (advisor?.actions||[])" :key="'r'+idx">
+                                <div class="advisor-action-item" :class="{'top-action':idx===0}" :title="rec.reasoning">
+                                    <span style="font-size:0.7rem;color:var(--text-muted);min-width:14px" x-text="idx===0?'★':(idx+1)"></span>
+                                    <span class="action-name" x-text="rec.action.toUpperCase()"></span>
+                                    <div class="action-score-bar"><div class="fill" :style="'width:'+rec.score+'%'" :class="idx===0?'fill-green':'fill-gold'"></div></div>
+                                    <span class="action-ev" :class="rec.ev>=0?'positive':'negative'"
+                                          x-text="'EV ' + (rec.ev>=0?'+':'') + rec.ev.toFixed(0)"
+                                          title="Expected Value: estimated chip profit/loss from this action"></span>
+                                    <span class="action-label" x-text="rec.label" style="font-size:0.65rem"></span>
+                                </div>
+                            </template>
+                        </div>
+                        <div x-show="advisor?.top_action?.bet_range" style="padding:8px 0">
+                            <div style="font-size:0.8rem;color:var(--text-muted)">Suggested Bet</div>
+                            <div style="font-weight:700;font-family:var(--font-mono);color:var(--gold)">
+                                $<span x-text="advisor?.top_action?.bet_range?.[0]||''"></span> — $<span x-text="advisor?.top_action?.bet_range?.[1]||''"></span>
+                                <span class="badge" :class="advisor?.top_action?.bet_type==='value'?'badge-green':(advisor?.top_action?.bet_type==='bluff'?'badge-red':'badge-gold')" x-text="advisor?.top_action?.bet_type||''" :title="betTypeTooltip(advisor?.top_action?.bet_type)" style="margin-left:6px"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div x-show="advisorEnabled && !advisor" style="padding:20px;text-align:center;color:var(--text-muted);font-size:0.85rem">
+                        <template x-if="advisorLoading">
+                            <div><span class="spinner"></span> Calculating recommendations...</div>
+                        </template>
+                        <template x-if="!advisorLoading && state.phase==='setup'">
+                            <span>Set up a game to see advisor.</span>
+                        </template>
+                        <template x-if="!advisorLoading && state.phase==='playing' && !canAct">
+                            <span>Waiting for your turn...</span>
+                        </template>
+                        <template x-if="!advisorLoading && state.phase!=='setup' && state.phase!=='playing'">
+                            <span>Deal a hand to see recommendations.</span>
+                        </template>
+                    </div>
+                </div>
+                <!-- Log -->
+                <div class="sidebar-panel" :class="{active:sidebarTab==='log'}">
+                    <div style="display:flex;justify-content:flex-end;gap:6px;margin-bottom:8px" x-show="historyList.length > 0 || actionLog.length > 0">
+                        <button class="btn btn-sm" @click="copyHistory()" title="Copy hand history to clipboard">📋 Copy</button>
+                        <button class="btn btn-sm" @click="downloadHistory()" title="Download hand history as text file">💾 Export</button>
+                    </div>
+                    <div class="game-log">
+                        <div x-show="actionLog.length===0 && historyList.length===0" style="padding:20px;text-align:center;color:var(--text-muted);font-size:0.85rem">No actions yet.</div>
+
+                        <!-- Current hand actions -->
+                        <div x-show="actionLog.length > 0" style="margin-bottom:12px">
+                            <div style="font-weight:700;font-size:0.75rem;color:var(--gold);letter-spacing:0.5px;padding-bottom:4px;border-bottom:1px solid var(--border-default);margin-bottom:6px">
+                                CURRENT HAND #<span x-text="state.hand_number"></span>
+                            </div>
+                            <template x-for="(entry,idx) in actionLog" :key="'l'+idx">
+                                <div>
+                                    <div class="log-street-header" x-show="idx===0||entry.street!==actionLog[idx-1].street" x-text="entry.street.toUpperCase()"></div>
+                                    <div class="log-entry">
+                                        <span class="log-player" :style="'color:'+getPlayerColor(entry.seat)" x-text="entry.player_name"></span>
+                                        <span class="log-action" :class="entry.action" x-text="formatAction(entry)"></span>
+                                        <span class="log-amount" x-show="entry.amount>0" x-text="'$'+entry.amount"></span>
+                                        <span class="badge badge-red" x-show="entry.is_all_in" style="font-size:0.6rem">ALL IN</span>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+
+                        <!-- Previous hands history -->
+                        <template x-for="(hand,hidx) in historyList" :key="'h'+hidx">
+                            <div style="margin-bottom:12px;opacity:0.7">
+                                <div style="font-weight:600;font-size:0.7rem;color:var(--text-muted);letter-spacing:0.3px;padding-bottom:3px;border-bottom:1px solid var(--border-muted);margin-bottom:4px;display:flex;justify-content:space-between">
+                                    <span x-text="'HAND #' + hand.hand_number"></span>
+                                    <span x-text="(hand.winners||[]).map(w => w.name + ' +$' + w.amount).join(', ')" style="color:var(--green-accent)"></span>
+                                </div>
+                                <template x-for="(entry,eidx) in hand.actions" :key="'ha'+hidx+'_'+eidx">
+                                    <div>
+                                        <div class="log-street-header" x-show="eidx===0||entry.street!==hand.actions[eidx-1].street" x-text="entry.street.toUpperCase()" style="font-size:0.65rem"></div>
+                                        <div class="log-entry" style="font-size:0.75rem">
+                                            <span class="log-player" x-text="entry.player_name"></span>
+                                            <span class="log-action" :class="entry.action" x-text="formatAction(entry)"></span>
+                                            <span class="log-amount" x-show="entry.amount>0" x-text="'$'+entry.amount"></span>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+                <!-- Settings -->
+                <div class="sidebar-panel" :class="{active:sidebarTab==='settings'}">
+                    <div class="settings-group">
+                        <div class="settings-group-title">AI Behavior</div>
+                        <div class="settings-row">
+                            <label title="Overall AI decision speed">Speed</label>
+                            <select x-model="localSettings.timing_preset" @change="saveSettings()">
+                                <option value="fast">Fast / Practice</option>
+                                <option value="realistic">Realistic</option>
+                                <option value="tournament">Tournament</option>
+                            </select>
+                        </div>
+                        <div class="settings-row">
+                            <label title="0% = robotic. 100% = erratic.">Variance</label>
+                            <input type="range" min="0" max="100" x-model.number="localSettings.variance" @change="saveSettings()">
+                            <span class="settings-value" x-text="localSettings.variance+'%'"></span>
+                        </div>
+                    </div>
+                    <div class="settings-group">
+                        <div class="settings-group-title">Advisor</div>
+                        <div class="settings-row">
+                            <label title="Show equity, outs, pot odds, recommendations, and other advisor stats. Disabling hides all visual aids without affecting AI play.">Enable Advisor</label>
+                            <label class="toggle"><input type="checkbox" x-model="advisorEnabled"><span class="slider"></span></label>
+                        </div>
+                    </div>
+                    <div class="settings-group">
+                        <div class="settings-group-title">Deal</div>
+                        <div class="settings-row">
+                            <label title="Discard one card face-down before flop/turn/river (standard rule)">Burn Cards</label>
+                            <label class="toggle"><input type="checkbox" x-model="localSettings.burn_cards" @change="saveSettings()"><span class="slider"></span></label>
+                        </div>
+                    </div>
+                    <div class="settings-group">
+                        <div class="settings-group-title">Pass & Play</div>
+                        <div class="settings-row">
+                            <label title="Hide all players' cards except the active player. For passing the device between human players.">Hide Hands</label>
+                            <label class="toggle"><input type="checkbox" x-model="hideHands"><span class="slider"></span></label>
+                        </div>
+                        <div class="settings-row" x-show="hideHands">
+                            <label title="Seconds to wait before showing the next player's cards">Countdown</label>
+                            <input type="range" min="1" max="10" x-model.number="localSettings.pass_play_seconds">
+                            <span class="settings-value" x-text="localSettings.pass_play_seconds + 's'"></span>
+                        </div>
+                    </div>
+                    <div class="settings-group">
+                        <div class="settings-group-title">Auto-Advance</div>
+                        <div class="settings-row">
+                            <label title="Automatically deal the next hand after showdown, with a configurable delay">Auto Deal</label>
+                            <label class="toggle"><input type="checkbox" x-model="localSettings.auto_advance"><span class="slider"></span></label>
+                        </div>
+                        <div class="settings-row" x-show="localSettings.auto_advance">
+                            <label title="Seconds to wait before automatically dealing the next hand">Delay</label>
+                            <input type="range" min="1" max="15" x-model.number="localSettings.auto_advance_delay">
+                            <span class="settings-value" x-text="localSettings.auto_advance_delay + 's'"></span>
+                        </div>
+                    </div>
+                    <div class="settings-group">
+                        <div class="settings-group-title">Shortcuts</div>
+                        <div style="font-size:0.8rem;color:var(--text-secondary);display:flex;flex-direction:column;gap:4px">
+                            <div><span class="kbd">F</span> Fold</div>
+                            <div><span class="kbd">C</span> Check / Call</div>
+                            <div><span class="kbd">R</span> Raise / Bet</div>
+                            <div><span class="kbd">N</span> New Hand</div>
+                            <div><span class="kbd">Z</span> Undo</div>
+                            <div><span class="kbd">M</span> Toggle Sound</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- ACTION BAR -->
+        <div class="action-bar" :class="{inactive:!canAct}">
+            <div class="action-buttons">
+                <button class="action-btn fold-btn" @click="doAction('fold')" :disabled="!canAct">Fold <span class="kbd">F</span></button>
+                <button class="action-btn check-call-btn" @click="doCheckCall()" :disabled="!canAct"><span x-text="checkCallLabel"></span> <span class="kbd">C</span></button>
+                <button class="action-btn raise-btn" @click="doRaise()" :disabled="!canRaise"><span x-text="raiseLabel"></span> <span class="kbd">R</span></button>
+            </div>
+            <div class="bet-controls" x-show="canRaise">
+                <div class="bet-slider-row">
+                    <div style="flex:1;position:relative">
+                        <!-- Recommended range indicator -->
+                        <div x-show="advisorEnabled && advisor?.top_action?.bet_range" class="slider-recommend"
+                             :style="sliderRecommendStyle()"
+                             :title="'Recommended: $' + (advisor?.top_action?.bet_range?.[0]||'') + ' — $' + (advisor?.top_action?.bet_range?.[1]||'')"></div>
+                        <input type="range" :min="raiseMin" :max="raiseMax" x-model.number="betAmount" step="1" style="width:100%">
+                    </div>
+                    <div class="bet-amount-display" x-text="'$'+betAmount"></div>
+                </div>
+                <div class="bet-presets">
+                    <button class="bet-preset-btn" @click="setBetPreset(0.5)" title="Half pot">½ Pot</button>
+                    <button class="bet-preset-btn" @click="setBetPreset(1.0)" title="Full pot">Pot</button>
+                    <button class="bet-preset-btn" @click="setBetPreset(2.0)" title="Double pot">2× Pot</button>
+                    <button class="bet-preset-btn" @click="betAmount=raiseMax" title="All your chips">All-In</button>
+                </div>
+            </div>
+            <div class="action-info" x-show="state.phase==='playing'">
+                <div>Pot <span class="info-big" x-text="'$'+state.pot"></span></div>
+                <div x-show="toCallAmount>0">To Call <span class="info-big" x-text="'$'+toCallAmount"></span></div>
+                <div x-show="state.valid_actions?.max_opponent_stack && betAmount > state.valid_actions.max_opponent_stack"
+                     style="font-size:0.7rem;color:var(--orange-accent)"
+                     title="Your bet exceeds what the largest opponent can call. They will go all-in for their remaining chips and a side pot will be created.">
+                    Effective: $<span x-text="state.valid_actions?.max_opponent_stack || 0"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- SETUP MODAL -->
+        <div class="modal-overlay" x-show="showSetup" x-cloak @click.self="showSetup=false">
+            <div class="modal" @click.stop style="max-width:650px">
+                <div class="modal-header"><h2>New Game Setup</h2><button class="btn btn-sm btn-icon" @click="showSetup=false">✕</button></div>
+                <div class="modal-body">
+                    <div class="form-row">
+                        <div class="form-group"><label>Small Blind</label><input type="number" x-model.number="setupData.small_blind" min="1"></div>
+                        <div class="form-group"><label>Big Blind</label><input type="number" x-model.number="setupData.big_blind" min="2"></div>
+                    </div>
+                    <div>
+                        <label style="font-size:0.8rem;font-weight:600;color:var(--text-secondary);text-transform:uppercase">Players (<span x-text="setupData.players.length"></span>/10)</label>
+                        <!-- Column headers -->
+                        <div style="display:grid;grid-template-columns:24px 1fr 80px 85px 120px 24px;gap:8px;padding:6px 10px;font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.3px">
+                            <span>#</span><span>Name</span><span>Stack</span><span>Type</span><span>AI Style</span><span></span>
+                        </div>
+                        <div style="display:flex;flex-direction:column;gap:6px">
+                            <template x-for="(p,idx) in setupData.players" :key="'sp'+idx">
+                                <div style="display:grid;grid-template-columns:24px 1fr 80px 85px 120px 24px;gap:8px;align-items:center;padding:6px 10px;background:var(--bg-tertiary);border-radius:var(--radius-md)">
+                                    <span style="font-size:0.75rem;color:var(--text-muted)" x-text="idx+1"></span>
+                                    <input type="text" x-model="p.name" placeholder="Name" style="width:100%">
+                                    <input type="number" x-model.number="p.stack" min="1" style="width:100%">
+                                    <select x-model="p.player_type" style="width:100%"><option value="human">Human</option><option value="ai">AI</option></select>
+                                    <select x-model="p.ai_style" style="width:100%;visibility:visible" :style="p.player_type!=='ai' && 'visibility:hidden'">
+                                        <option value="random">Random</option>
+                                        <option value="loose_passive">Loose Passive</option>
+                                        <option value="tight_aggressive">Tight Aggressive</option>
+                                        <option value="gto">GTO</option>
+                                    </select>
+                                    <span style="color:var(--red-accent);cursor:pointer;font-size:1.1rem;text-align:center;opacity:0.6" @click="removeSetupPlayer(idx)" x-show="setupData.players.length>2" @mouseover="$el.style.opacity=1" @mouseout="$el.style.opacity=0.6">✕</span>
+                                </div>
+                            </template>
+                        </div>
+                        <button class="btn btn-sm" style="margin-top:8px" @click="addSetupPlayer()" :disabled="setupData.players.length>=10">+ Add Player</button>
+                    </div>
+                    <!-- Game options row -->
+                    <div style="display:flex;gap:24px;align-items:center;padding-top:8px;border-top:1px solid var(--border-muted)">
+                        <label style="display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-secondary);cursor:pointer">
+                            <span class="toggle" style="width:36px;height:20px">
+                                <input type="checkbox" x-model="localSettings.auto_advance">
+                                <span class="slider"></span>
+                            </span>
+                            Auto-Deal
+                        </label>
+                        <label style="display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-secondary);cursor:pointer"
+                               title="Show equity, recommendations, outs, and other advisor stats during play">
+                            <span class="toggle" style="width:36px;height:20px">
+                                <input type="checkbox" x-model="advisorEnabled">
+                                <span class="slider"></span>
+                            </span>
+                            Advisor
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer"><button class="btn" @click="showSetup=false">Cancel</button><button class="btn btn-primary btn-lg" @click="startNewGame()">Start Game</button></div>
+            </div>
+        </div>
+
+        <!-- PLAYER EDIT MODAL -->
+        <div class="modal-overlay" x-show="editingPlayer" x-cloak @click.self="cancelPlayerEdit()">
+            <div class="modal" @click.stop style="max-width:420px">
+                <div class="modal-header">
+                    <h2>Edit Player</h2>
+                    <button class="btn btn-sm btn-icon" @click="cancelPlayerEdit()">✕</button>
+                </div>
+                <div class="modal-body" x-show="editingPlayer">
+                    <div class="form-group">
+                        <label>Name</label>
+                        <input type="text" x-model="editingPlayer.name" style="width:100%">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Type</label>
+                            <select x-model="editingPlayer.player_type">
+                                <option value="human">Human</option>
+                                <option value="ai">AI</option>
+                            </select>
+                        </div>
+                        <div class="form-group" x-show="editingPlayer.player_type === 'ai'">
+                            <label>AI Style</label>
+                            <select x-model="editingPlayer.ai_style">
+                                <option value="random">Random</option>
+                                <option value="loose_passive">Loose Passive</option>
+                                <option value="tight_aggressive">Tight Aggressive</option>
+                                <option value="gto">GTO (Balanced)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Stack</label>
+                            <input type="number" x-model.number="editingPlayer.stack" min="1">
+                        </div>
+                        <div class="form-group">
+                            <label>Color</label>
+                            <input type="color" x-model="editingPlayer.color" style="width:50px;height:34px;padding:2px;border-radius:var(--radius-sm);border:1px solid var(--border-default);background:var(--bg-tertiary)">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn" @click="cancelPlayerEdit()">Cancel</button>
+                    <button class="btn btn-primary" @click="savePlayerEdit()">Save</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- PASS & PLAY OVERLAY -->
+        <div class="modal-overlay" x-show="passPlayActive" x-cloak @click="dismissPassPlay()" style="z-index:600;cursor:pointer">
+            <div class="showdown-card" @click="dismissPassPlay()" style="cursor:pointer;min-width:350px;border-color:var(--blue-accent);box-shadow:0 0 30px rgba(88,166,255,0.3)">
+                <div style="font-size:1.8rem;margin-bottom:8px">🔄</div>
+                <div style="font-size:1.2rem;font-weight:700;color:var(--text-primary);margin-bottom:8px">Pass the device</div>
+                <div style="font-size:0.9rem;color:var(--text-secondary);margin-bottom:16px">
+                    It's <span style="color:var(--gold);font-weight:700" x-text="state.players?.[state.action_seat]?.name || 'next player'"></span>'s turn
+                </div>
+                <div style="font-size:3rem;font-weight:800;color:var(--blue-accent);font-family:var(--font-mono)" x-text="passPlayCountdown"></div>
+                <div style="font-size:0.75rem;color:var(--text-muted);margin-top:12px">Click anywhere to skip</div>
+            </div>
+        </div>
+
+        <!-- SHOWDOWN OVERLAY -->
+        <div class="showdown-overlay" x-show="showdown" x-cloak @click="dismissShowdown()">
+            <div class="showdown-card" @click.stop style="max-width:500px;width:90%;max-height:85vh;overflow-y:auto">
+                <div class="showdown-title" x-text="showdown?.showdown ? '🏆 Showdown' : '🃏 Winner'"></div>
+
+                <!-- Community cards in showdown -->
+                <div x-show="showdown?.showdown && state.community_cards?.length" style="display:flex;gap:6px;justify-content:center;margin-bottom:16px">
+                    <template x-for="cc in state.community_cards" :key="'sd_cc_'+cc.short">
+                        <div class="playing-card sm" :class="cc.is_red ? 'red' : 'black'" style="box-shadow:none">
+                            <span class="card-rank-tl" x-text="cc.rank_display"></span>
+                            <span class="card-suit-tl" x-text="cc.suit_symbol"></span>
+                            <span class="card-suit-center" x-text="cc.suit_symbol"></span>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- All player hands at showdown -->
+                <template x-if="showdown?.showdown && showdown?.hand_results">
+                    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
+                        <template x-for="p in state.players.filter(p => !p.is_folded && p.hole_cards)" :key="'sd_p_'+p.seat">
+                            <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:var(--radius-md)"
+                                 :style="isWinner(p.seat) ? 'background:rgba(212,168,67,0.12);border:1px solid var(--gold-dim)' : 'background:var(--bg-tertiary)'">
+                                <span style="font-weight:600;min-width:70px" :style="'color:'+p.color" x-text="p.name"></span>
+                                <div style="display:flex;gap:4px">
+                                    <template x-for="card in p.hole_cards" :key="'sd_c_'+card.short">
+                                        <div class="playing-card" :class="[card.is_red?'red':'black', isWinnerCard(p.seat,card)?'winner-card':'']"
+                                             style="width:36px;height:50px;font-size:0.6rem;box-shadow:none">
+                                            <span class="card-rank-tl" style="top:2px;left:3px;font-size:0.6rem" x-text="card.rank_display"></span>
+                                            <span class="card-suit-center" style="font-size:0.85rem" x-text="card.suit_symbol"></span>
+                                        </div>
+                                    </template>
+                                </div>
+                                <span style="flex:1;font-size:0.8rem;color:var(--text-secondary)" x-text="showdown?.hand_results?.[p.seat]?.rank_name || ''"></span>
+                                <span x-show="isWinner(p.seat)" style="font-weight:700;color:var(--green-accent);font-family:var(--font-mono);font-size:0.85rem"
+                                      x-text="'+$' + ((showdown?.winners||[]).find(w=>w.seat===p.seat)?.amount || 0)"></span>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                <!-- Single winner (fold) -->
+                <template x-if="!showdown?.showdown">
+                    <div>
+                        <template x-for="w in (showdown?.winners||[])" :key="'wf'+w.seat">
+                            <div style="margin-bottom:16px">
+                                <div class="showdown-winner" x-text="w.name + ' wins!'"></div>
+                                <div class="showdown-hand" x-text="w.hand_name"></div>
+                                <div class="showdown-amount" x-text="'+$' + w.amount"></div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                <!-- Auto-advance indicator -->
+                <div x-show="localSettings.auto_advance && showdown" style="font-size:0.7rem;color:var(--text-muted);margin-top:8px">
+                    Auto-dealing in <span x-text="localSettings.auto_advance_delay"></span>s...
+                </div>
+
+                <div style="display:flex;gap:8px;justify-content:center;margin-top:12px">
+                    <button class="btn" @click="dismissShowdown()">Dismiss</button>
+                    <button class="btn btn-gold" @click="dismissShowdown();newHand()">Next Hand <span class="kbd">N</span></button>
+                </div>
+            </div>
+        </div>
+
+        <!-- GAME OVER OVERLAY -->
+        <div class="modal-overlay" x-show="state.game_over" x-cloak style="z-index:700">
+            <div class="showdown-card" style="min-width:350px;border-color:var(--gold-bright);box-shadow:0 0 40px rgba(212,168,67,0.5)">
+                <div style="font-size:2.5rem;margin-bottom:8px">🏆</div>
+                <div style="font-size:1.4rem;font-weight:800;color:var(--gold-bright);margin-bottom:12px">Game Over</div>
+                <div style="font-size:1.2rem;font-weight:700;color:var(--text-primary);margin-bottom:4px"
+                     x-text="(state.game_over?.winner_name || 'Unknown') + ' wins the game!'"></div>
+                <div style="font-size:0.9rem;color:var(--text-secondary);margin-bottom:8px"
+                     x-text="'Final stack: $' + (state.game_over?.winner_stack || 0)"></div>
+                <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:16px"
+                     x-text="(state.game_over?.hands_played || 0) + ' hands played'"></div>
+                <div style="display:flex;gap:8px;justify-content:center">
+                    <button class="btn btn-gold btn-lg" @click="showSetup = true">New Game</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.3/dist/cdn.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="/static/js/sounds.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

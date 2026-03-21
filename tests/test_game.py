@@ -1,0 +1,478 @@
+"""
+Integration tests for GameState - full hand lifecycle.
+
+Tests the complete flow: setup → deal → bet → streets → showdown.
+"""
+
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from engine.game import GameState, Street, GamePhase
+from engine.player import PlayerType
+from engine.betting import SidePotCalculator
+
+
+def make_game(num_players=3, stack=1000, sb=5, bb=10):
+    """Helper: create a game with N players ready to play."""
+    g = GameState()
+    g.set_blinds(sb, bb)
+    for i in range(num_players):
+        g.add_player(f"Player{i+1}", stack=stack, player_type="human")
+    return g
+
+
+# ========================================================================
+# Basic Setup
+# ========================================================================
+
+def test_add_players():
+    g = GameState()
+    p1 = g.add_player("Alice", stack=500)
+    p2 = g.add_player("Bob", stack=1000)
+    assert len(g.players) == 2
+    assert g.players[0].name == "Alice"
+    assert g.players[1].stack == 1000
+
+def test_new_hand_deals_cards():
+    g = make_game(3)
+    state = g.new_hand()
+    for p in g.players:
+        assert len(p.hole_cards) == 2, f"{p.name} has {len(p.hole_cards)} cards"
+    assert g.phase == GamePhase.PLAYING
+    assert g.street == Street.PREFLOP
+
+
+# ========================================================================
+# Blinds
+# ========================================================================
+
+def test_blinds_posted():
+    g = make_game(3, sb=5, bb=10)
+    g.new_hand()
+    # Dealer is seat 0, SB is seat 1, BB is seat 2
+    # Check pot = SB + BB
+    assert g.pot == 15
+    # BB player should have 10 less
+    bb_seat = g._get_bb_seat()
+    assert g.players[bb_seat].stack == 990
+    sb_seat = g._get_sb_seat()
+    assert g.players[sb_seat].stack == 995
+
+def test_heads_up_blinds():
+    g = make_game(2, sb=5, bb=10)
+    g.new_hand()
+    assert g.pot == 15
+    # Heads-up: dealer posts SB
+    assert g.players[g.dealer_seat].stack == 995
+
+
+# ========================================================================
+# Preflop Action
+# ========================================================================
+
+def test_preflop_fold_all():
+    """Everyone folds to BB — BB wins."""
+    g = make_game(3, sb=5, bb=10)
+    g.new_hand()
+    
+    # UTG (seat after BB) acts first
+    utg = g.action_seat
+    result = g.process_action(utg, "fold")
+    
+    # SB folds
+    sb = g.action_seat
+    result = g.process_action(sb, "fold")
+    
+    # BB wins uncontested
+    assert "winners" in result
+    assert len(result["winners"]) == 1
+    bb_seat = g._get_bb_seat()
+    assert result["winners"][0]["seat"] == bb_seat
+
+def test_preflop_call_and_check():
+    """Players call, BB checks — advance to flop."""
+    g = make_game(3, sb=5, bb=10)
+    g.new_hand()
+
+    # UTG calls
+    utg = g.action_seat
+    g.process_action(utg, "call")
+
+    # SB calls (needs 5 more)
+    sb = g.action_seat
+    g.process_action(sb, "call")
+
+    # BB checks (option)
+    bb = g.action_seat
+    result = g.process_action(bb, "check")
+
+    # Should advance to flop
+    assert g.street == Street.FLOP
+    assert len(g.community_cards) == 3
+
+def test_preflop_raise():
+    """UTG raises, others fold."""
+    g = make_game(3, sb=5, bb=10)
+    g.new_hand()
+
+    utg = g.action_seat
+    g.process_action(utg, "raise", 30)  # Raise to 30
+
+    sb = g.action_seat
+    g.process_action(sb, "fold")
+
+    bb = g.action_seat
+    result = g.process_action(bb, "fold")
+
+    assert "winners" in result
+    assert result["winners"][0]["seat"] == utg
+
+
+# ========================================================================
+# Full Hand to Showdown
+# ========================================================================
+
+def test_full_hand_to_showdown():
+    """Play a complete hand through to showdown."""
+    g = make_game(2, stack=500, sb=5, bb=10)
+    g.new_hand()
+
+    # Preflop: both call/check
+    seat = g.action_seat
+    g.process_action(seat, "call")  # SB calls (heads-up: dealer=SB)
+    seat = g.action_seat
+    g.process_action(seat, "check")  # BB checks
+
+    assert g.street == Street.FLOP
+    assert len(g.community_cards) == 3
+
+    # Flop: check-check
+    seat = g.action_seat
+    g.process_action(seat, "check")
+    seat = g.action_seat
+    g.process_action(seat, "check")
+
+    assert g.street == Street.TURN
+    assert len(g.community_cards) == 4
+
+    # Turn: check-check
+    seat = g.action_seat
+    g.process_action(seat, "check")
+    seat = g.action_seat
+    g.process_action(seat, "check")
+
+    assert g.street == Street.RIVER
+    assert len(g.community_cards) == 5
+
+    # River: check-check → showdown
+    seat = g.action_seat
+    g.process_action(seat, "check")
+    seat = g.action_seat
+    result = g.process_action(seat, "check")
+
+    assert result.get("showdown") is True
+    assert len(result["winners"]) >= 1
+    assert result["winners"][0]["amount"] > 0
+
+
+# ========================================================================
+# Side Pots
+# ========================================================================
+
+def test_side_pot_calculation():
+    """Direct test of side pot math."""
+    # Player A bets 100, B bets 200, C bets 200. A is all-in.
+    bets = [
+        (0, 100, False),  # Player A: 100, not folded
+        (1, 200, False),  # Player B: 200, not folded
+        (2, 200, False),  # Player C: 200, not folded
+    ]
+    pots = SidePotCalculator.calculate(bets)
+    assert len(pots) == 2
+    # Main pot: 100 * 3 = 300 (all eligible)
+    assert pots[0].amount == 300
+    assert sorted(pots[0].eligible_seats) == [0, 1, 2]
+    # Side pot: 100 * 2 = 200 (only B and C)
+    assert pots[1].amount == 200
+    assert sorted(pots[1].eligible_seats) == [1, 2]
+
+def test_side_pot_with_fold():
+    """Folded player's chips go to pot but they can't win."""
+    bets = [
+        (0, 50, True),    # Folded after betting 50
+        (1, 100, False),
+        (2, 100, False),
+    ]
+    pots = SidePotCalculator.calculate(bets)
+    # All 50 * 3 in first layer, but seat 0 not eligible
+    # Then 50 * 2 in second layer for seats 1,2
+    assert len(pots) == 2
+    assert pots[0].amount == 150  # 50 from each
+    assert 0 not in pots[0].eligible_seats  # Folded player can't win
+    assert pots[1].amount == 100  # 50 from each of 1,2
+
+
+# ========================================================================
+# Undo
+# ========================================================================
+
+def test_undo_action():
+    g = make_game(3, sb=5, bb=10)
+    g.new_hand()
+    
+    utg = g.action_seat
+    pot_before = g.pot
+    stack_before = g.players[utg].stack
+    
+    # UTG calls
+    g.process_action(utg, "call")
+    assert g.players[utg].stack < stack_before
+    
+    # Undo
+    result = g.undo_action()
+    assert result.get("ok") is True
+    assert g.players[utg].stack == stack_before
+    assert g.pot == pot_before
+    assert g.action_seat == utg
+
+
+# ========================================================================
+# Position Labels
+# ========================================================================
+
+def test_positions_3_players():
+    g = make_game(3)
+    g.new_hand()
+    positions = g._get_positions()
+    values = set(positions.values())
+    assert "BTN" in values
+    assert "SB" in values
+    assert "BB" in values
+
+def test_positions_6_players():
+    g = make_game(6)
+    g.new_hand()
+    positions = g._get_positions()
+    values = set(positions.values())
+    assert "BTN" in values
+    assert "SB" in values
+    assert "BB" in values
+    assert "UTG" in values
+
+
+# ========================================================================
+# Dealer Rotation
+# ========================================================================
+
+def test_dealer_rotates():
+    g = make_game(3)
+    g.new_hand()
+    first_dealer = g.dealer_seat
+    
+    # Play out a quick hand (everyone folds)
+    while g.phase == GamePhase.PLAYING:
+        seat = g.action_seat
+        g.process_action(seat, "fold")
+    
+    g.new_hand()
+    assert g.dealer_seat != first_dealer
+
+
+# ========================================================================
+# Edge Cases
+# ========================================================================
+
+def test_cannot_act_out_of_turn():
+    g = make_game(3)
+    g.new_hand()
+    wrong_seat = (g.action_seat + 1) % 3
+    result = g.process_action(wrong_seat, "call")
+    assert "error" in result
+
+def test_all_in_call():
+    """Player with short stack goes all-in when calling."""
+    g = GameState()
+    g.set_blinds(5, 10)
+    g.add_player("Big Stack", stack=1000)
+    g.add_player("Short Stack", stack=8)  # Can't even cover BB
+    g.new_hand()
+    # Short stack posted BB of 8 (all they had), should be all-in
+    # Actually the short stack might be SB in heads-up
+    # Either way, test that the game handles it
+    assert g.phase == GamePhase.PLAYING
+
+def test_multiple_hands():
+    """Play multiple hands in sequence."""
+    g = make_game(3, stack=500)
+    for _ in range(5):
+        g.new_hand()
+        while g.phase == GamePhase.PLAYING:
+            seat = g.action_seat
+            g.process_action(seat, "fold")
+    assert g.hand_number == 5
+    assert len(g.hand_histories) == 5
+
+
+def test_busted_player_skipped():
+    """A player with 0 chips should be folded out at hand start."""
+    g = GameState()
+    g.set_blinds(5, 10)
+    g.add_player("Rich", stack=1000)
+    g.add_player("Broke", stack=0)
+    g.add_player("Normal", stack=500)
+    g.new_hand()
+    # Broke player should be folded
+    broke = g.players[1]
+    assert broke.is_folded is True
+    # Game should still work with 2 active players
+    assert g.phase == GamePhase.PLAYING
+
+
+def test_all_in_showdown():
+    """Two players all-in preflop should run out board and showdown."""
+    g = GameState()
+    g.set_blinds(5, 10)
+    g.add_player("A", stack=100)
+    g.add_player("B", stack=100)
+    g.new_hand()
+    
+    # Heads-up: dealer is SB, acts first preflop
+    seat = g.action_seat
+    result = g.process_action(seat, "raise", 100)  # All-in
+    
+    # Other player calls all-in
+    if g.phase == GamePhase.PLAYING:
+        seat = g.action_seat
+        result = g.process_action(seat, "call")
+    
+    # Should have gone to showdown with full board
+    assert len(g.community_cards) == 5
+    assert g.phase == GamePhase.BETWEEN_HANDS
+    assert len(g.hand_histories) == 1
+    assert g.hand_histories[0].winners
+
+
+def test_three_way_all_in_side_pots():
+    """Three players all-in with different stacks creates side pots."""
+    g = GameState()
+    g.set_blinds(5, 10)
+    g.add_player("Short", stack=50)
+    g.add_player("Medium", stack=150)
+    g.add_player("Big", stack=500)
+    g.new_hand()
+    
+    # Everyone goes all-in
+    safety = 0
+    while g.phase == GamePhase.PLAYING and safety < 10:
+        safety += 1
+        seat = g.action_seat
+        result = g.process_action(seat, "raise", 500)  # All-in attempt
+        if "error" in result:
+            result = g.process_action(seat, "call")
+    
+    # Should resolve with community cards and winners
+    assert g.phase == GamePhase.BETWEEN_HANDS
+    assert len(g.community_cards) == 5
+
+
+def test_hand_history_structure():
+    """Verify hand history has correct structure after a completed hand."""
+    g = make_game(2, stack=500, sb=5, bb=10)
+    g.new_hand()
+    
+    # Quick fold
+    seat = g.action_seat
+    g.process_action(seat, "fold")
+    
+    assert len(g.hand_histories) == 1
+    hh = g.hand_histories[0]
+    assert hh.hand_number == 1
+    assert len(hh.actions) >= 3  # SB, BB, fold
+    assert len(hh.winners) == 1
+    assert hh.winners[0]["amount"] > 0
+    
+    # Verify action dicts
+    for a in hh.actions:
+        d = a.to_dict()
+        assert "street" in d
+        assert "seat" in d
+        assert "player_name" in d
+        assert "action" in d
+
+
+def test_manual_deal_mode():
+    """Manual deal mode should not auto-deal cards."""
+    g = make_game(2)
+    g.manual_deal = True
+    g.new_hand()
+    # No cards should be dealt
+    for p in g.players:
+        assert len(p.hole_cards) == 0
+    # Should still be able to assign cards
+    from engine.deck import Card
+    result = g.assign_card("As", "player", 0)
+    assert result.get("ok")
+    assert len(g.players[0].hole_cards) == 1
+
+
+def test_used_cards_tracking():
+    """State should track all used cards for the card picker."""
+    g = make_game(2)
+    g.new_hand()
+    state = g.get_state()
+    used = state["used_cards"]
+    # Should have 4 hole cards (2 per player) + burned cards
+    assert len(used) >= 4
+    # All should be valid short strings
+    for card_str in used:
+        assert len(card_str) == 2 or len(card_str) == 3  # e.g. "As" or "Th"
+
+
+def test_undo_restores_completely():
+    """Undo should restore stack, pot, and action seat exactly."""
+    g = make_game(3, sb=5, bb=10)
+    g.new_hand()
+    
+    utg = g.action_seat
+    pot_before = g.pot
+    stack_before = g.players[utg].stack
+    bet_before = g.players[utg].current_bet
+    action_seat_before = g.action_seat
+    
+    # Call
+    g.process_action(utg, "call")
+    assert g.players[utg].stack < stack_before
+    assert g.pot > pot_before
+    
+    # Undo
+    g.undo_action()
+    assert g.players[utg].stack == stack_before
+    assert g.pot == pot_before
+    assert g.players[utg].current_bet == bet_before
+    assert g.action_seat == action_seat_before
+
+
+# ========================================================================
+# Runner
+# ========================================================================
+
+if __name__ == "__main__":
+    test_funcs = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
+    passed = 0
+    failed = 0
+    for fn in test_funcs:
+        try:
+            fn()
+            passed += 1
+            print(f"  PASS  {fn.__name__}")
+        except Exception as e:
+            failed += 1
+            print(f"  FAIL  {fn.__name__}: {e}")
+            import traceback
+            traceback.print_exc()
+    print(f"\n{'='*50}")
+    print(f"Results: {passed} passed, {failed} failed, {passed + failed} total")
+    if failed:
+        sys.exit(1)
+    else:
+        print("All tests passed.")

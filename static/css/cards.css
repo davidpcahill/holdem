@@ -1,0 +1,188 @@
+/* ============================================
+   Pure CSS Playing Cards
+   No images required. Fully scalable.
+   ============================================ */
+
+/* ── Card Container ── */
+.card-container {
+    display: inline-flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+/* ── Card Face ── */
+.playing-card {
+    width: var(--card-width);
+    height: var(--card-height);
+    border-radius: var(--radius-card);
+    background: var(--card-bg);
+    border: 2px solid var(--card-border);
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-display);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+    flex-shrink: 0;
+    user-select: none;
+}
+.playing-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+.playing-card.sm {
+    width: var(--card-width-sm);
+    height: var(--card-height-sm);
+}
+.playing-card.sm .card-rank-tl,
+.playing-card.sm .card-rank-br { font-size: 0.7rem; }
+.playing-card.sm .card-suit-tl,
+.playing-card.sm .card-suit-br { font-size: 0.6rem; }
+.playing-card.sm .card-suit-center { font-size: 1.6rem; }
+
+/* Rank + Suit corners */
+.card-rank-tl, .card-rank-br {
+    position: absolute;
+    font-size: 0.85rem;
+    font-weight: 700;
+    line-height: 1;
+}
+.card-suit-tl, .card-suit-br {
+    position: absolute;
+    font-size: 0.7rem;
+    line-height: 1;
+}
+.card-rank-tl { top: 5px; left: 6px; }
+.card-suit-tl { top: 18px; left: 6px; }
+.card-rank-br { bottom: 5px; right: 6px; transform: rotate(180deg); }
+.card-suit-br { bottom: 18px; right: 6px; transform: rotate(180deg); }
+
+/* Center suit */
+.card-suit-center {
+    font-size: 2rem;
+    opacity: 0.85;
+}
+
+/* Red suits */
+.playing-card.red { color: var(--card-red); }
+.playing-card.black { color: var(--card-black); }
+
+/* ── Card Back ── */
+.playing-card.card-back {
+    background: var(--card-back-bg);
+    border-color: var(--card-back-border);
+    overflow: hidden;
+}
+.playing-card.card-back::before {
+    content: '';
+    position: absolute;
+    inset: 4px;
+    border: 2px solid var(--card-back-border);
+    border-radius: calc(var(--radius-card) - 2px);
+    background: repeating-linear-gradient(
+        45deg,
+        transparent,
+        transparent 4px,
+        var(--card-back-pattern) 4px,
+        var(--card-back-pattern) 5px
+    );
+    opacity: 0.4;
+}
+.playing-card.card-back::after {
+    content: '♦';
+    position: absolute;
+    color: var(--card-back-border);
+    font-size: 1.4rem;
+    z-index: 1;
+    text-shadow: 0 0 4px rgba(212, 168, 67, 0.4);
+}
+
+/* ── Empty card slot (dashed outline) ── */
+.card-slot-empty {
+    width: var(--card-width);
+    height: var(--card-height);
+    border-radius: var(--radius-card);
+    border: 2px dashed var(--border-default);
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.3;
+    flex-shrink: 0;
+}
+.card-slot-empty.sm {
+    width: var(--card-width-sm);
+    height: var(--card-height-sm);
+}
+
+/* ── Card Picker Grid (52-card spread) ── */
+.card-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(13, 1fr);
+    gap: 3px;
+}
+
+/* Card picker active target highlight */
+.player-seat[style*="cursor"] { cursor: pointer; }
+.card-slot-empty.drop-target {
+    border-color: var(--gold);
+    border-style: solid;
+    opacity: 1;
+    animation: dropPulse 1s ease infinite;
+}
+@keyframes dropPulse {
+    0%, 100% { border-color: var(--gold-dim); }
+    50% { border-color: var(--gold-bright); box-shadow: 0 0 8px rgba(212, 168, 67, 0.3); }
+}
+
+.card-picker-grid .playing-card {
+    width: 100%;
+    height: 0;
+    padding-bottom: 140%;
+    cursor: pointer;
+    font-size: 0.65rem;
+}
+.card-picker-grid .playing-card .card-rank-tl { top: 3px; left: 3px; font-size: 0.65rem; }
+.card-picker-grid .playing-card .card-suit-tl { top: 14px; left: 3px; font-size: 0.55rem; }
+.card-picker-grid .playing-card .card-suit-center { font-size: 1rem; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+.card-picker-grid .playing-card .card-rank-br,
+.card-picker-grid .playing-card .card-suit-br { display: none; }
+
+.card-picker-grid .playing-card.used {
+    opacity: 0.15;
+    pointer-events: none;
+    filter: grayscale(1);
+}
+.card-picker-grid .playing-card:hover:not(.used) {
+    transform: translateY(-2px) scale(1.05);
+    box-shadow: var(--shadow-glow-gold);
+    border-color: var(--gold);
+}
+
+/* ── Dealing animation ── */
+.playing-card.dealing {
+    animation: dealCard 0.3s ease-out;
+}
+@keyframes dealCard {
+    from {
+        opacity: 0;
+        transform: translateY(-30px) scale(0.8) rotate(-5deg);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1) rotate(0);
+    }
+}
+
+/* ── Winner highlight ── */
+.playing-card.winner-card {
+    border-color: var(--gold);
+    box-shadow: var(--shadow-glow-gold);
+    animation: winnerGlow 1.5s ease infinite;
+}
+@keyframes winnerGlow {
+    0%, 100% { box-shadow: 0 0 10px rgba(212, 168, 67, 0.3); }
+    50% { box-shadow: 0 0 20px rgba(212, 168, 67, 0.6); }
+}
