@@ -94,11 +94,21 @@ document.addEventListener('alpine:init', () => {
         },
 
         get toCallAmount() {
-            return this.state.valid_actions?.to_call || 0;
+            const raw = this.state.valid_actions?.to_call || 0;
+            const stack = this.state.valid_actions?.player_stack ?? Infinity;
+            return Math.min(raw, stack);
+        },
+
+        get isCallAllIn() {
+            const actions = this.state.valid_actions?.actions || [];
+            const callAction = actions.find(a => a.action === 'call');
+            return callAction?.is_all_in || false;
         },
 
         get checkCallLabel() {
-            return this.toCallAmount > 0 ? `Call $${this.toCallAmount}` : 'Check';
+            if (this.toCallAmount <= 0) return 'Check';
+            if (this.isCallAllIn) return `All-In $${this.toCallAmount}`;
+            return `Call $${this.toCallAmount}`;
         },
 
         get canRaise() {

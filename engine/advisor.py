@@ -233,7 +233,7 @@ class Advisor:
             win_pct, result.pot_odds, result.equity_edge,
             result.spr, result.fold_equity, result.implied_odds,
             result.position_modifier, pot, to_call, stack,
-            valid_actions, num_opponents
+            valid_actions, num_opponents, has_community=len(community) > 0
         )
 
         if result.actions:
@@ -344,7 +344,8 @@ class Advisor:
     @staticmethod
     def _rank_actions(
         equity, pot_odds, equity_edge, spr, fold_equity, implied_odds,
-        position_mod, pot, to_call, stack, valid_actions, num_opponents
+        position_mod, pot, to_call, stack, valid_actions, num_opponents,
+        has_community=False
     ) -> List[ActionRecommendation]:
         """
         Rank available actions by incremental expected value.
@@ -354,6 +355,7 @@ class Advisor:
         - The EV represents marginal chip gain from the new chips being risked
         
         Fold is NEVER recommended over check (check is free).
+        Semi-bluffs and bluffs are only offered post-flop (need community cards for draws).
         When nearly all-in (stack < pot/2), skip intermediate raise sizes.
         """
         recs = []
@@ -464,8 +466,8 @@ class Advisor:
                         bet_range=(bet_lo_total, bet_hi_total), bet_type="value",
                     ))
 
-                # Semi-bluff
-                if 25 < equity < 60 and fold_equity > 20:
+                # Semi-bluff: only post-flop (need draws to semi-bluff with)
+                if has_community and 25 < equity < 60 and fold_equity > 20:
                     new_chips = min(actual_max_new_chips, max(int(pot * 0.45), 1))
                     ev_semi = (fold_equity / 100) * pot + (1 - fold_equity / 100) * (eq * (pot + new_chips) - new_chips)
                     score = max(30, min(70, 30 + ev_semi / max(pot, 1) * 80))
@@ -477,8 +479,8 @@ class Advisor:
                         bet_type="semi_bluff",
                     ))
 
-                # Bluff
-                if equity < 30 and fold_equity > 35 and spr > 3:
+                # Bluff: only post-flop (preflop bluffs need range-based logic we don't have)
+                if has_community and equity < 30 and fold_equity > 35 and spr > 3:
                     new_chips = min(actual_max_new_chips, max(int(pot * 0.5), 1))
                     ev_bluff = (fold_equity / 100) * pot - (1 - fold_equity / 100) * new_chips
                     if ev_bluff > 0:
