@@ -148,23 +148,9 @@ def _run_ai_turn():
             # Small delay between AI actions for readability
             time.sleep(0.2)
 
-        # Emit final state (it's now a human's turn or hand is over)
-        final_state = _get_full_state()
-
-        # If it's now a human's turn, precompute advisor and include it
-        # so the frontend doesn't need a separate HTTP round-trip
-        if (game.phase == GamePhase.PLAYING
-                and game.action_seat >= 0
-                and game.action_seat < len(game.players)
-                and _game_version == my_version):
-            next_player = game.players[game.action_seat]
-            if next_player.player_type == PlayerType.HUMAN and next_player.hole_cards:
-                try:
-                    final_state["_advisor"] = _compute_advisor(next_player.seat)
-                except Exception:
-                    pass  # Non-critical
-
-        socketio.emit("state_update", final_state)
+        # Emit final state as safety net (ai_action already carried the critical state)
+        # Don't include advisor here — the ai_action emit already delivered it
+        socketio.emit("state_update", _get_full_state())
 
 
 # ──────────────────────────────────────────────

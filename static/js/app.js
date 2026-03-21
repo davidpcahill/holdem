@@ -233,6 +233,8 @@ document.addEventListener('alpine:init', () => {
             }
 
             if (this.canAct) {
+                // It's human's turn — ensure AI thinking indicator is cleared
+                this.aiThinkingSeat = -1;
                 if (this.betAmount < this.raiseMin) this.betAmount = this.raiseMin;
                 if (this.betAmount > this.raiseMax) this.betAmount = this.raiseMax;
 
