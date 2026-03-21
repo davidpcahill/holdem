@@ -13,9 +13,6 @@ Built with Python/Flask backend and vanilla JS frontend. No databases, no accoun
 
 ![Python](https://img.shields.io/badge/Python-3.10+-blue) ![Flask](https://img.shields.io/badge/Flask-3.0+-green) ![Tests](https://img.shields.io/badge/Tests-83%20passing-brightgreen)
 
-![New Game screenshot](documentation/images/newgame.png)
-![Game screenshot](documentation/images/game.png)
-
 ## Quick Start
 
 ```bash
