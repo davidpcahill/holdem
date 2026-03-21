@@ -181,7 +181,10 @@
                         <div class="advisor-equity" x-show="advisor?.equity">
                             <div style="display:flex;justify-content:space-between;align-items:center">
                                 <span style="font-weight:600;font-size:0.8rem" title="Win probability from Monte Carlo simulation">Equity</span>
-                                <span style="font-size:0.65rem;color:var(--text-muted)" x-text="advisor?.equity?.is_preflop?'Preflop lookup':(advisor?.equity?.simulations||0)+' sims'"></span>
+                                <span style="font-size:0.6rem;color:var(--text-muted)">
+                                    <span x-text="advisor?.equity?.is_preflop?'Preflop lookup':(advisor?.equity?.simulations||0)+' sims'"></span>
+                                    <span x-show="advisor?.timing?.equity" x-text="' · ' + (advisor?.timing?.equity||0) + 'ms'"></span>
+                                </span>
                             </div>
                             <div class="equity-bar">
                                 <div class="eq-win" :style="'width:'+(advisor?.equity?.win||0)+'%'"></div>
@@ -200,6 +203,7 @@
                              title="Equity is computed vs random hands, but an opponent who bets likely has a stronger range. Recommendations use this adjusted figure.">
                             Adj. equity vs bet: <span x-text="(advisor?.adjusted_equity||0).toFixed(1)+'%'"></span>
                         </div>
+                        <!-- Best Hand -->
                         <div x-show="advisor?.hand_name" style="padding:4px 0;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
                             <span style="font-size:0.75rem;color:var(--text-muted);flex-shrink:0">Best Hand</span>
                             <template x-for="bhc in (advisor?.best_hand_cards||[])" :key="'bh_'+bhc.short">
@@ -230,20 +234,39 @@
                                 <div class="advisor-stat-value neutral" x-text="(advisor?.fold_equity?.toFixed(0)||'0')+'%'"></div>
                             </div>
                         </div>
-                        <!-- Outs (compact) -->
-                        <div x-show="advisor?.outs && advisor.outs.count>0" style="padding:3px 0;font-size:0.75rem;color:var(--text-secondary)"
-                             :title="'Cards that will improve your hand. ' + (advisor?.outs?.draws||[]).join(', ')">
-                            <span style="color:var(--gold);font-weight:700" x-text="advisor?.outs?.count||0"></span> outs
-                            <span x-text="(advisor?.outs?.draws||[]).length ? '(' + (advisor?.outs?.draws||[]).join(', ') + ')' : ''"></span>
-                            — <span x-text="(advisor?.outs?.hit_either_pct?.toFixed(1)||'0') + '% by river'"></span>
+                        <!-- Outs with card details -->
+                        <div x-show="advisor?.outs && advisor.outs.count>0" style="padding:3px 0">
+                            <div style="font-size:0.75rem;color:var(--text-secondary);display:flex;justify-content:space-between;align-items:baseline">
+                                <span>
+                                    <span style="color:var(--gold);font-weight:700" x-text="advisor?.outs?.count||0"></span> outs
+                                    <span x-text="(advisor?.outs?.draws||[]).length ? '(' + (advisor?.outs?.draws||[]).join(', ') + ')' : ''"></span>
+                                    — <span x-text="(advisor?.outs?.hit_either_pct?.toFixed(1)||'0') + '% by river'"></span>
+                                </span>
+                                <span x-show="advisor?.timing?.outs" style="font-size:0.55rem;color:var(--text-muted)" x-text="(advisor?.timing?.outs||0)+'ms'"></span>
+                            </div>
+                            <!-- Individual out cards -->
+                            <div x-show="advisor?.outs?.out_cards?.length" style="display:flex;flex-wrap:wrap;gap:3px;margin-top:3px">
+                                <template x-for="oc in (advisor?.outs?.out_cards||[])" :key="'oc_'+oc.short">
+                                    <span :title="oc.makes + ' (' + oc.hit_pct + '%)'"
+                                          style="font-size:0.7rem;font-weight:600;font-family:var(--font-mono);padding:1px 4px;border-radius:3px;background:var(--bg-tertiary);border:1px solid var(--border-muted)"
+                                          :style="oc.is_red ? 'color:var(--card-red)' : 'color:var(--text-primary)'"
+                                          x-text="oc.display"></span>
+                                </template>
+                            </div>
                         </div>
-                        <!-- Recommendations with inline bet range -->
+                        <!-- Clickable Recommendations -->
                         <div class="advisor-actions" x-show="advisor?.actions?.length">
-                            <div style="font-weight:600;font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.3px;margin-top:2px">
-                                Recommendations
+                            <div style="display:flex;justify-content:space-between;align-items:baseline">
+                                <div style="font-weight:600;font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.3px;margin-top:2px">
+                                    Recommendations
+                                </div>
+                                <span x-show="advisor?.timing?.total" style="font-size:0.55rem;color:var(--text-muted)" x-text="(advisor?.timing?.total||0)+'ms total'"></span>
                             </div>
                             <template x-for="(rec,idx) in (advisor?.actions||[])" :key="'r'+idx">
-                                <div class="advisor-action-item" :class="{'top-action':idx===0}" :title="rec.reasoning">
+                                <div class="advisor-action-item" :class="{'top-action':idx===0}"
+                                     :title="rec.reasoning"
+                                     style="cursor:pointer"
+                                     @click="executeRecommendation(rec)">
                                     <span style="font-size:0.65rem;color:var(--text-muted);min-width:12px" x-text="idx===0?'★':(idx+1)"></span>
                                     <div style="flex:1;min-width:0">
                                         <div style="display:flex;align-items:center;gap:6px">

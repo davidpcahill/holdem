@@ -406,6 +406,10 @@
     border-color: var(--gold-dim);
     background: rgba(212, 168, 67, 0.08);
 }
+.advisor-action-item:hover {
+    border-color: var(--gold-dim);
+    background: rgba(212, 168, 67, 0.12);
+}
 .advisor-action-item .action-name {
     font-weight: 600;
     font-size: 0.85rem;

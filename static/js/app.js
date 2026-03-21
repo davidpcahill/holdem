@@ -344,6 +344,26 @@ document.addEventListener('alpine:init', () => {
             this.doAction(ra.action, this.betAmount);
         },
 
+        executeRecommendation(rec) {
+            if (!this.canAct) return;
+            const action = rec.action;
+            if (action === 'fold') {
+                this.doAction('fold');
+            } else if (action === 'check') {
+                this.doAction('check');
+            } else if (action === 'call') {
+                this.doCheckCall();
+            } else if (action === 'bet' || action === 'raise') {
+                // Use midpoint of recommended bet range, or current betAmount if no range
+                if (rec.bet_range) {
+                    const mid = this.snapBet(Math.round((rec.bet_range[0] + rec.bet_range[1]) / 2));
+                    this.betAmount = Math.max(this.raiseMin, Math.min(mid, this.raiseMax));
+                }
+                const ra = (this.state.valid_actions?.actions || []).find(a => a.action === 'bet' || a.action === 'raise');
+                if (ra) this.doAction(ra.action, this.betAmount);
+            }
+        },
+
         async undoAction() {
             try {
                 const res = await fetch('/api/undo', { method: 'POST' });
