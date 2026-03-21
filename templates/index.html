@@ -262,13 +262,10 @@
                         <template x-if="advisorLoading">
                             <div><span class="spinner"></span> Calculating recommendations...</div>
                         </template>
-                        <template x-if="!advisorLoading && state.phase==='setup'">
-                            <span>Set up a game to see advisor.</span>
-                        </template>
                         <template x-if="!advisorLoading && state.phase==='playing' && !canAct">
                             <span>Waiting for your turn...</span>
                         </template>
-                        <template x-if="!advisorLoading && state.phase!=='setup' && state.phase!=='playing'">
+                        <template x-if="!advisorLoading && state.phase!=='playing'">
                             <span>Deal a hand to see recommendations.</span>
                         </template>
                     </div>
