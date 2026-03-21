@@ -264,14 +264,41 @@ class Advisor:
         outs = 0
         draws = []
 
-        # Test each remaining card: only count if it improves hand RANK
-        # (e.g., high card → pair, pair → two pair), not just kicker improvements
+        # Count meaningful outs — cards that give YOU a better hand
+        # Board pairings don't count: pairing a 3 on the board helps everyone equally
+        # Only count: pairing hole cards, completing flushes/straights, improving to trips+
         improving_cards = []
+        hole_ranks = set(c.rank for c in hole_cards)
+        hole_suits = [c.suit for c in hole_cards]
+
         for card in remaining:
             test_cards = all_cards + [card]
             new_result = HandEvaluator.evaluate(test_cards)
-            # Must improve by at least one hand rank category
-            if new_result.rank > current.rank:
+            if new_result.rank <= current.rank:
+                continue  # No rank improvement at all
+
+            # Check if this card meaningfully helps US (not just the board)
+            is_meaningful = False
+
+            # Pairs or improves one of our hole cards
+            if card.rank in hole_ranks:
+                is_meaningful = True
+            # Completes a flush with our suited hole cards
+            elif card.suit in hole_suits:
+                suit_count = sum(1 for c in all_cards if c.suit == card.suit)
+                if suit_count >= 3:  # We already have 3+ of this suit, 4th/5th completes
+                    is_meaningful = True
+            # Makes two pair or better using at least one hole card
+            elif new_result.rank.value >= 2:  # TWO_PAIR or better
+                # Verify at least one hole card is part of the made hand
+                new_hand_ranks = [c.rank for c in new_result.cards] if hasattr(new_result, 'cards') and new_result.cards else []
+                if any(r in new_hand_ranks for r in hole_ranks):
+                    is_meaningful = True
+            # Straight completions where our hole card matters
+            elif new_result.rank == HandRank.STRAIGHT:
+                is_meaningful = True  # Straights inherently use a range of ranks
+
+            if is_meaningful:
                 improving_cards.append(card)
 
         outs = len(improving_cards)
