@@ -109,7 +109,9 @@ body {
 .hidden { display: none !important; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
 
-[title] { cursor: help; }
+/* Help cursor only on advisor stats and explicit tooltip elements */
+.advisor-stat[title] { cursor: help; }
+.advisor-stat-label { cursor: help; }
 
 /* Tooltips via title are native. For richer tooltips: */
 .tooltip-trigger {
