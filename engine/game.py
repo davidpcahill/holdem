@@ -526,10 +526,7 @@ class GameState:
         hand_results: List[Tuple[int, HandResult]] = []
         for p in players_in:
             all_cards = p.hole_cards + self.community_cards
-            if len(all_cards) >= 5:
-                result = HandEvaluator.evaluate(all_cards)
-            else:
-                result = HandEvaluator.evaluate(all_cards)
+            result = HandEvaluator.evaluate(all_cards)
             hand_results.append((p.seat, result))
 
         # Calculate side pots

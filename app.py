@@ -27,7 +27,6 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 # ──────────────────────────────────────────────
 game = GameState()
 ai_engine = AIEngine(timing_preset="realistic", variance=0.3)
-_equity_cache = {}
 _ai_lock = threading.Lock()
 _game_version = 0  # Incremented on new game; AI threads check this to abort
 
