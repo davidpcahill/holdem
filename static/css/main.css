@@ -557,7 +557,8 @@
     font-weight: 700;
     font-size: 1.1rem;
     color: var(--gold);
-    min-width: 80px;
+    width: 100px;
+    flex-shrink: 0;
     text-align: center;
 }
 .bet-presets {
