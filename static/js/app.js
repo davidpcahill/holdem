@@ -41,6 +41,7 @@ document.addEventListener('alpine:init', () => {
         // Street tracking for sounds
         _lastStreet: '',
         _lastHandNum: 0,
+        _lastSeq: 0,
 
         // Pass & Play
         hideHands: true,
@@ -170,6 +171,8 @@ document.addEventListener('alpine:init', () => {
                 this.socket = io({ transports: ['websocket', 'polling'] });
 
                 this.socket.on('state_update', (data) => {
+                    // Ignore stale socket updates that arrive after newer HTTP responses
+                    if (data._seq && data._seq < this._lastSeq) return;
                     this.updateState(data);
                 });
 
@@ -231,6 +234,7 @@ document.addEventListener('alpine:init', () => {
 
         updateState(data) {
             if (!data) return;
+            if (data._seq) this._lastSeq = data._seq;
             const prevActionSeat = this.state.action_seat;
             const prevHandNum = this.state.hand_number;
             const prevInHand = (this.state.players || []).filter(p => !p.is_folded && !p.is_sitting_out).length;

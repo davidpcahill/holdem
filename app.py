@@ -29,6 +29,7 @@ game = GameState()
 ai_engine = AIEngine(timing_preset="realistic", variance=0.3)
 _ai_lock = threading.Lock()
 _game_version = 0  # Incremented on new game; AI threads check this to abort
+_state_seq = 0     # Monotonic counter so frontend can ignore stale socket updates
 
 # Settings
 settings = {
@@ -47,9 +48,12 @@ settings = {
 
 def _get_full_state(viewer_seat=None):
     """Build the complete state payload for the frontend."""
+    global _state_seq
+    _state_seq += 1
     state = game.get_state(viewer_seat=viewer_seat)
     state["settings"] = settings
     state["hand_histories"] = [h.to_dict() for h in game.hand_histories[-20:]]
+    state["_seq"] = _state_seq
     return state
 
 
