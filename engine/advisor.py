@@ -22,6 +22,7 @@ from itertools import combinations
 from .deck import Card, Suit, RANK_SHORT, RANK_DISPLAY, SUIT_SYMBOLS
 from .hand_eval import HandEvaluator, HandRank
 from .equity import EquityCalculator, EquityResult
+from .constants import ADVISOR_POSITION_MODIFIER
 import time as _time
 
 
@@ -213,11 +214,7 @@ class Advisor:
 
         # --- Position ---
         result.position = position
-        result.position_modifier = {
-            "BTN": 5, "CO": 3, "HJ": 1, "BTN/SB": 2,
-            "SB": -2, "BB": 0, "UTG": -4, "UTG+1": -3,
-            "MP": 0, "MP+1": 1,
-        }.get(position, 0)
+        result.position_modifier = ADVISOR_POSITION_MODIFIER.get(position, 0)
 
         # --- Implied odds (rough estimate) ---
         if to_call > 0:

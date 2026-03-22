@@ -20,6 +20,7 @@ from enum import Enum
 from .player import Player, AIStyle
 from .equity import EquityCalculator, EquityResult
 from .deck import Card
+from .constants import AI_POSITION_BONUS
 
 
 class AIDecision:
@@ -173,11 +174,7 @@ class AIEngine:
         spr = stack / pot if pot > 0 else 20
 
         # Position modifier: later position = more aggressive
-        position_bonus = {
-            "BTN": 8, "CO": 5, "HJ": 2, "BTN/SB": 3,
-            "SB": -2, "BB": 0, "UTG": -5, "UTG+1": -3,
-            "MP": 0, "MP+1": 1, "MP+2": 2,
-        }.get(position, 0)
+        position_bonus = AI_POSITION_BONUS.get(position, 0)
 
         # Adjust equity with position
         adjusted_equity = win_pct + position_bonus
