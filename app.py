@@ -9,6 +9,7 @@ import logging
 import os
 import time
 import threading
+from typing import Optional
 from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO, emit
 
@@ -18,7 +19,8 @@ from engine.equity import EquityCalculator
 from engine.ai import AIEngine, AIDecision, DIFFICULTY_PRESETS
 from engine.advisor import Advisor
 from engine.ranges import get_range_grid, get_all_positions
-from engine.tutorial import get_tutorial_tip
+from engine.tutorial import TutorialState, TUTORIAL_HANDS
+from engine.deck import Card
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
@@ -34,6 +36,7 @@ _ai_lock = threading.Lock()
 _seq_lock = threading.Lock()
 _game_version = 0  # Incremented on new game; AI threads check this to abort
 _state_seq = 0     # Monotonic counter so frontend can ignore stale socket updates
+tutorial_state: Optional[TutorialState] = None  # Active tutorial tracker
 
 # Settings
 settings = {
@@ -99,6 +102,9 @@ def _run_ai_turn():
 
 
 def _run_ai_turn_inner():
+    # Tutorial mode uses scripted bot actions, not the AI engine
+    if tutorial_state and tutorial_state.is_active:
+        return
     my_version = _game_version
     my_game = game  # Capture local ref — prevents acting on a replaced game
     with _ai_lock:
@@ -381,6 +387,33 @@ def api_action():
     # Broadcast state update
     socketio.emit("state_update", full_state)
 
+    # Tutorial mode: run scripted bot turns synchronously
+    if tutorial_state and tutorial_state.is_active:
+        # Run bot actions until it's the player's turn or hand ends
+        while (game.phase == GamePhase.PLAYING
+                and game.action_seat >= 0
+                and game.players[game.action_seat].player_type == PlayerType.AI):
+            time.sleep(0.5)  # Brief delay for realism
+            bot_result = _run_tutorial_bot()
+            if not bot_result:
+                break
+            if bot_result.get("showdown") or bot_result.get("winners"):
+                result["showdown"] = bot_result.get("showdown")
+                result["winners"] = bot_result.get("winners")
+                break
+
+        # Refresh state after bot turns
+        result["state"] = _get_full_state()
+        # Include guided action and tutorial state
+        guided = tutorial_state.get_guided_action(game.street.value)
+        result["tutorial"] = tutorial_state.to_dict()
+        if guided:
+            result["guided"] = guided
+        # Include outro if hand ended
+        if game.phase != GamePhase.PLAYING:
+            result["outro"] = tutorial_state.get_outro()
+        return jsonify(result)
+
     # If next actor is AI, trigger AI processing (it will push advisor when done)
     if (game.phase == GamePhase.PLAYING
             and game.action_seat >= 0
@@ -453,13 +486,6 @@ def _compute_advisor(seat: int) -> dict:
     result = advice.to_dict()
     result["_compute_ms"] = round((time.time() - t0) * 1000)
 
-    # Tutorial tip (if enabled in settings)
-    if settings.get("tutorial_mode"):
-        seen = settings.get("_tutorial_seen", [])
-        tip = get_tutorial_tip(result, game.street.value, position, game.hand_number, seen)
-        if tip:
-            result["tutorial"] = tip
-
     return result
 
 
@@ -526,7 +552,6 @@ def api_unassign_card():
     if not card_str:
         return jsonify({"error": "Missing card"}), 400
 
-    from engine.deck import Card
     card = Card.from_short(card_str)
 
     if target == "player" and seat is not None:
@@ -542,6 +567,180 @@ def api_unassign_card():
                 game.deck._cards.append(card)
 
     return jsonify({"ok": True, "state": _get_full_state()})
+
+
+# ──────────────────────────────────────────────
+# Routes — Tutorial
+# ──────────────────────────────────────────────
+
+@app.route("/api/tutorial/start", methods=["POST"])
+def api_tutorial_start():
+    """Initialize the scripted tutorial."""
+    global game, ai_engine, _game_version, tutorial_state
+
+    _game_version += 1
+    tutorial_state = TutorialState()
+    game = GameState()
+
+    # Set up 2-player game: Human + Tutorial Bot
+    game.add_player("You", 1000, "human")
+    game.add_player("Tutorial Bot", 1000, "ai", "loose_passive")
+    game.small_blind = 5
+    game.big_blind = 10
+    game.phase = GamePhase.SETUP
+
+    hand = tutorial_state.current_hand()
+    return jsonify({
+        "ok": True,
+        "state": _get_full_state(),
+        "tutorial": tutorial_state.to_dict(),
+        "intro": hand["intro"] if hand else None,
+    })
+
+
+@app.route("/api/tutorial/deal", methods=["POST"])
+def api_tutorial_deal():
+    """Deal the current tutorial hand with predetermined cards."""
+    global tutorial_state
+
+    if not tutorial_state or not tutorial_state.is_active:
+        return jsonify({"error": "No active tutorial"}), 400
+
+    hand = tutorial_state.current_hand()
+    if not hand:
+        return jsonify({"error": "Tutorial complete"}), 400
+
+    # Reset stacks for this hand
+    stack = hand.get("stack_override", 1000)
+    for p in game.players:
+        p.stack = stack
+
+    # Set up rigged deal
+    game.tutorial_deal = {
+        "player_cards": hand["player_cards"],
+        "bot_cards": hand["bot_cards"],
+        "community": hand["community"],
+        "dealer_seat": hand.get("dealer_seat", 0),
+        "player_seat": 0,
+        "bot_seat": 1,
+    }
+
+    # Deal the hand
+    game.new_hand()
+    full = _get_full_state()
+
+    # Get guided action for current street
+    guided = tutorial_state.get_guided_action(game.street.value)
+
+    # If first actor is the bot, run scripted bot action
+    if (game.phase == GamePhase.PLAYING
+            and game.action_seat >= 0
+            and game.players[game.action_seat].player_type == PlayerType.AI):
+        bot_result = _run_tutorial_bot()
+        if bot_result:
+            full = _get_full_state()
+            guided = tutorial_state.get_guided_action(game.street.value)
+
+    return jsonify({
+        "ok": True,
+        "state": full,
+        "tutorial": tutorial_state.to_dict(),
+        "guided": guided,
+    })
+
+
+@app.route("/api/tutorial/next", methods=["POST"])
+def api_tutorial_next():
+    """Advance to the next tutorial hand."""
+    global tutorial_state
+
+    if not tutorial_state:
+        return jsonify({"error": "No active tutorial"}), 400
+
+    is_complete = tutorial_state.advance_hand()
+
+    if is_complete:
+        return jsonify({
+            "ok": True,
+            "tutorial": tutorial_state.to_dict(),
+            "complete": True,
+        })
+
+    hand = tutorial_state.current_hand()
+    return jsonify({
+        "ok": True,
+        "tutorial": tutorial_state.to_dict(),
+        "intro": hand["intro"] if hand else None,
+    })
+
+
+@app.route("/api/tutorial/skip", methods=["POST"])
+def api_tutorial_skip():
+    """Exit tutorial mode."""
+    global tutorial_state
+    tutorial_state = None
+    return jsonify({"ok": True})
+
+
+def _run_tutorial_bot() -> Optional[dict]:
+    """Execute the scripted tutorial bot action synchronously."""
+    if not tutorial_state or not tutorial_state.is_active:
+        return None
+    if game.phase != GamePhase.PLAYING:
+        return None
+    if game.action_seat < 0:
+        return None
+
+    player = game.players[game.action_seat]
+    if player.player_type != PlayerType.AI:
+        return None
+
+    # Get scripted action
+    bot_action = tutorial_state.get_bot_action(game.street.value)
+    if not bot_action:
+        # Default: check if possible, else fold
+        valid = game.get_valid_actions(player.seat)
+        if "check" in valid.get("actions", []):
+            bot_action = {"action": "check", "amount": 0}
+        else:
+            bot_action = {"action": "fold", "amount": 0}
+
+    action = bot_action["action"]
+    amount = bot_action.get("amount", 0)
+
+    # For raises with amount=0, go all-in
+    if action == "raise" and amount == 0:
+        valid = game.get_valid_actions(player.seat)
+        amount = player.stack  # all-in
+
+    result = game.process_action(player.seat, action, amount)
+
+    # Emit via socket so frontend updates
+    action_state = _get_full_state()
+    socketio.emit("ai_action", {
+        "seat": player.seat,
+        "name": player.name,
+        "decision": {"action": action, "amount": amount},
+        "result": result,
+        "state": action_state,
+        "street_changed": False,
+    })
+
+    # Check for showdown
+    if result.get("showdown") or result.get("winners"):
+        return result
+
+    # If street changed, emit reveal
+    if game.street.value != action_state.get("street", "preflop"):
+        time.sleep(0.3)
+        reveal_state = _get_full_state()
+        socketio.emit("street_reveal", {
+            "street": game.street.value,
+            "community_cards": reveal_state["community_cards"],
+            "state": reveal_state,
+        })
+
+    return result
 
 
 @app.route("/api/settings", methods=["GET", "POST"])

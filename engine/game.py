@@ -128,6 +128,10 @@ class GameState:
         # Manual deal mode
         self.manual_deal = False
 
+        # Tutorial mode: predetermined cards
+        self.tutorial_deal: Optional[dict] = None  # {player_cards, bot_cards, community, dealer_seat}
+        self._tutorial_community: Optional[List[Card]] = None  # stacked community cards
+
         # History
         self.hand_histories: List[HandHistory] = []
         self.current_hand_log: Optional[HandHistory] = None
@@ -195,8 +199,10 @@ class GameState:
                 self.small_blind = int(self.small_blind * self.escalate_multiplier)
                 self.big_blind = int(self.big_blind * self.escalate_multiplier)
 
-        # Rotate dealer
-        if self.hand_number > 0:
+        # Rotate dealer (or override for tutorial)
+        if self.tutorial_deal and "dealer_seat" in self.tutorial_deal:
+            self.dealer_seat = self.tutorial_deal["dealer_seat"]
+        elif self.hand_number > 0:
             self.dealer_seat = self._next_active_seat(self.dealer_seat)
 
         self.hand_number += 1
@@ -221,6 +227,10 @@ class GameState:
 
         # Fresh deck
         self.deck = Deck()
+
+        # Tutorial: apply predetermined cards
+        if self.tutorial_deal:
+            self._apply_tutorial_deal()
 
         # Start hand log (must be before _post_blinds so blind actions are logged)
         self.current_hand_log = HandHistory(
@@ -280,6 +290,37 @@ class GameState:
         self.pot += bb_actual
         self._log_action(bb_seat, "big_blind", bb_actual)
 
+    def _apply_tutorial_deal(self) -> None:
+        """Set up predetermined cards for tutorial mode.
+
+        Assigns specific hole cards to players and stacks the community
+        cards on top of the deck so _deal_community draws them naturally.
+        """
+        from engine.deck import Card as DeckCard
+        td = self.tutorial_deal
+        if not td:
+            return
+
+        # Parse community cards and remove from deck
+        community = [DeckCard.from_short(c) for c in td.get("community", [])]
+        self.deck.remove_cards(community)
+        self._tutorial_community = community
+
+        # Parse and assign hole cards to specific seats
+        for seat_key in ("player_cards", "bot_cards"):
+            if seat_key not in td:
+                continue
+            seat = td.get("player_seat" if seat_key == "player_cards" else "bot_seat", -1)
+            if seat < 0 or seat >= len(self.players):
+                continue
+            cards = [DeckCard.from_short(c) for c in td[seat_key]]
+            self.deck.remove_cards(cards)
+            # Store for _deal_hole_cards to pick up
+            self.players[seat]._tutorial_hole = cards
+
+        # Clear the tutorial_deal so it doesn't persist
+        self.tutorial_deal = None
+
     def _deal_hole_cards(self) -> None:
         """Deal 2 cards to each player in the hand (including all-in from blinds)."""
         # Use is_in_hand (not is_active) so players who went all-in posting
@@ -290,8 +331,18 @@ class GameState:
         order = self._seats_from(start, in_hand)
         for _ in range(2):
             for seat in order:
-                card = self.deck.draw_one()
-                self.players[seat].hole_cards.append(card)
+                # Tutorial override: use predetermined cards
+                tutorial_cards = getattr(self.players[seat], '_tutorial_hole', None)
+                if tutorial_cards and len(self.players[seat].hole_cards) < 2:
+                    idx = len(self.players[seat].hole_cards)
+                    self.players[seat].hole_cards.append(tutorial_cards[idx])
+                else:
+                    card = self.deck.draw_one()
+                    self.players[seat].hole_cards.append(card)
+        # Clean up tutorial attributes
+        for p in self.players:
+            if hasattr(p, '_tutorial_hole'):
+                del p._tutorial_hole
 
     # ------------------------------------------------------------------
     # Actions
@@ -509,7 +560,12 @@ class GameState:
         if self.burn_cards_enabled and self.deck and self.deck.remaining > count:
             burned = self.deck.burn()
             self.burned_cards.append(burned)
-        if self.deck:
+        # Tutorial: use predetermined community cards
+        if self._tutorial_community:
+            cards = self._tutorial_community[:count]
+            self._tutorial_community = self._tutorial_community[count:]
+            self.community_cards.extend(cards)
+        elif self.deck:
             cards = self.deck.draw(count)
             self.community_cards.extend(cards)
 
