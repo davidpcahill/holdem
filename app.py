@@ -185,14 +185,26 @@ def _run_ai_turn():
 
                 # Build fresh state with new _seq so it's never filtered as stale
                 reveal_state = _get_full_state()
+
+                # Check if the next actor is AI — if so, include their thinking
+                # indicator with the reveal to avoid a "waiting" flash
+                next_ai_thinking = None
+                if (my_game.phase == GamePhase.PLAYING
+                        and my_game.action_seat >= 0
+                        and my_game.action_seat < len(my_game.players)):
+                    next_p = my_game.players[my_game.action_seat]
+                    if next_p.player_type == PlayerType.AI and next_p.is_active:
+                        next_ai_thinking = {
+                            "seat": next_p.seat,
+                            "name": next_p.name,
+                        }
+
                 socketio.emit("street_reveal", {
                     "street": post_street,
                     "community_cards": reveal_state["community_cards"],
                     "state": reveal_state,
+                    "next_thinking": next_ai_thinking,
                 })
-
-                # Extra pause after reveal before next AI acts
-                time.sleep(0.5)
             else:
                 socketio.emit("ai_action", {
                     "seat": player.seat,
