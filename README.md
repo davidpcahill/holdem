@@ -11,7 +11,7 @@ A local web-based Texas Hold'em game with AI opponents and a real-time strategy 
 
 Built with Python/Flask backend and vanilla JS frontend. No databases, no accounts, no external dependencies beyond Flask. Runs entirely on your machine.
 
-![Python](https://img.shields.io/badge/Python-3.10+-blue) ![Flask](https://img.shields.io/badge/Flask-3.0+-green) ![Tests](https://img.shields.io/badge/Tests-320%20passing-brightgreen)
+![Python](https://img.shields.io/badge/Python-3.10+-blue) ![Flask](https://img.shields.io/badge/Flask-3.0+-green) ![Tests](https://img.shields.io/badge/Tests-339%20passing-brightgreen)
 
 ## Quick Start
 
@@ -38,6 +38,7 @@ Open **http://localhost:5000** in your browser.
 - **GTO**: Balanced ranges, mixed strategies, positional awareness
 - **Random** (default): Picks a different base style each decision — unpredictable
 - **Difficulty Presets**: Easy / Medium / Hard / Expert — bundles AI style, timing, variance, and equity simulations
+- **Adaptive AI**: Per-player toggle — AI reads opponent VPIP and aggression factor to adjust bluff frequency, calling thresholds, and c-bet rates (requires 10+ hand sample)
 - Configurable think time and variance (0% robotic → 100% erratic)
 - Speed presets: Fast/Practice, Realistic, Tournament
 - Tracks opponent VPIP and aggression factor over time
@@ -59,6 +60,13 @@ Real-time recommendations for human players based on standard poker math:
 The advisor uses incremental EV calculation (`equity × (pot + cost) - cost`) — the standard pot-odds formula from poker theory. Bet ranges are always clamped to your actual remaining stack. Can be toggled on/off instantly without affecting AI play.
 
 Every abbreviated stat (SPR, EV, VPIP, etc.) has a tooltip explaining the full term and what it means.
+
+### Preflop Range Charts
+Collapsible 13×13 grid in the Advisor panel showing which hands to play from each position:
+- Position selector (BTN, CO, HJ, SB, BB, UTG, etc.)
+- Color-coded cells: green = raise, yellow = call, red = fold
+- Current hand highlighted on the grid when cards are dealt
+- Based on standard position-aware equity thresholds
 
 ### Card Picker (Cheat Sheet Mode)
 Use during live games to get advisor recommendations on real hands:
@@ -94,6 +102,14 @@ Per-player statistics tracked across all hands:
 - **W$SD**: Won Money at Showdown percentage
 - Net P&L, biggest pot won, fold/raise counts
 
+### Hand Replayer
+Step through any completed hand action-by-action:
+- Select any previous hand from the Replay sidebar tab
+- Playback controls: play/pause, step forward/back, speed (1×/2×/4×)
+- Mini table shows player cards, bets, pot, and community cards at each step
+- Progress bar with street markers (preflop → flop → turn → river)
+- Quick-launch replay button (▶) on each hand in the Log panel
+
 ### Hand History
 - Live action log with color-coded player names and street headers
 - Full scrollable history of all previous hands with winners and amounts
@@ -114,6 +130,23 @@ CSS keyframe animations for a polished feel:
 - Card dealing (flip + slide), chip sliding to pot, pot win glow
 - Dealer button pop, street badge entrance, fold fade-out
 - AI thinking pulse, active turn glow, connection status pulse
+- **Flying Chip Animations**: Chips fly from player seats to pot on bets, and from pot back to winner on showdown (toggle in Settings)
+
+### Card Themes
+Five visual themes for card display (switchable in Settings):
+- **Classic**: Standard red/black suits
+- **Four-Color**: Green clubs, blue diamonds (easier suit recognition)
+- **Dark**: Dark card faces with softer colors
+- **Minimal**: Flat design, no shadows
+- **Royal**: Gold accents, purple card backs
+
+### Tutorial Mode
+Progressive poker concept teaching for beginners:
+- **Tutorial Game** button in New Game modal — starts a guided 1v1 vs an easy bot
+- Contextual tips appear in the Advisor panel based on the current game situation
+- 10 concepts taught progressively: hand strength, position, pot odds, outs, SPR, fold equity, EV, bet sizing, bluffing, preflop ranges
+- Each tip has a "Got it!" dismiss button — dismissed concepts don't repeat
+- Toggle on/off in Settings without starting a new game
 
 ### Mobile Responsive
 - Optimized layout at 600px breakpoint for phones
@@ -132,6 +165,9 @@ CSS keyframe animations for a polished feel:
 - Blind escalation (every N hands × multiplier)
 - Pass & Play countdown duration
 - Hide Hands toggle
+- Card theme selector (Classic / Four-Color / Dark / Minimal / Royal)
+- Chip animations toggle
+- Tutorial tips toggle
 
 ### Keyboard Shortcuts
 
@@ -168,8 +204,11 @@ holdem/
 │   ├── betting.py             # Betting round validation, side pot calculator
 │   ├── game.py                # Game state machine (~990 lines)
 │   ├── equity.py              # Monte Carlo + preflop lookup table
-│   ├── ai.py                  # AI decision engine (4 styles)
-│   └── advisor.py             # Outs, pot odds, EV, action recommendations
+│   ├── ai.py                  # AI decision engine (4 styles + adaptive)
+│   ├── advisor.py             # Outs, pot odds, EV, action recommendations
+│   ├── constants.py           # Shared position bonus dicts
+│   ├── ranges.py              # Preflop range chart generator (13×13 grid)
+│   └── tutorial.py            # Progressive tutorial concept system
 ├── static/
 │   ├── css/
 │   │   ├── theme.css          # Dark theme, CSS variables, form controls
@@ -183,16 +222,16 @@ holdem/
 ├── templates/
 │   └── index.html             # Single-page app shell
 └── tests/
-    ├── test_engine.py         # 49 tests: cards, deck, all hand ranks, kickers, equity
-    ├── test_game.py           # 43 tests: game lifecycle, side pots, undo, turn order, all-in blinds
+    ├── test_engine.py         # 61 tests: cards, deck, hand ranks, kickers, equity, ranges, tutorial
+    ├── test_game.py           # 45 tests: game lifecycle, side pots, undo, turn order, all-in blinds, replayer
     ├── test_api.py            # 34 tests: REST endpoints, race conditions, caching, advisor, difficulty, stats
-    ├── test_ai.py             # 6 tests: AI decision engine, think time, styles
+    ├── test_ai.py             # 10 tests: AI decision engine, think time, styles, adaptive
     ├── test_turn_order.py     # 12 tests: turn order, socket events, race conditions
     ├── test_final.py          # Integration: showdown, card reveal, game-over
     ├── test_e2e.py            # 22 tests: Playwright browser E2E (game lifecycle, mobile, animations)
     ├── conftest.py            # Shared fixtures: live server, Playwright page
     └── js/
-        ├── poker-logic.test.js # 95 tests: UI logic, state management, advisor refresh
+        ├── poker-logic.test.js # 106 tests: UI logic, state management, advisor refresh, replayer
         ├── app-socket.test.js  # 30 tests: socket events, reconnection, advisor fetch
         └── features.test.js    # 19 tests: difficulty presets, stats, history, advisor sims
 ```
@@ -200,17 +239,17 @@ holdem/
 ## Tests
 
 ```bash
-python tests/test_engine.py    # 49 tests — card primitives, hand evaluation, equity
-python tests/test_game.py      # 43 tests — game state machine, side pots, undo, turn order, all-in blinds
+python tests/test_engine.py    # 61 tests — card primitives, hand evaluation, equity, ranges, tutorial
+python tests/test_game.py      # 45 tests — game state machine, side pots, undo, turn order, all-in blinds, replayer
 python tests/test_api.py       # 34 tests — REST endpoints, race conditions, advisor, difficulty, stats
-python tests/test_ai.py        # 6 tests — AI decision engine, styles, think time
+python tests/test_ai.py        # 10 tests — AI decision engine, styles, think time, adaptive
 python tests/test_turn_order.py # 12 tests — turn order, socket events
 python tests/test_final.py     # Integration — showdown, game-over, exports
 pytest tests/test_e2e.py       # 22 tests — Playwright E2E (requires: pip install playwright pytest-playwright)
-npm test                       # 144 tests — UI logic, state management, socket, features
+npm test                       # 155 tests — UI logic, state management, socket, features, replayer
 ```
 
-320 tests (154 Python unit + 22 Playwright E2E + 144 JavaScript) covering hand evaluation (all 10 ranks, wheel straights, 7-card best-of-21, tiebreakers), equity calculator (preflop lookup, Monte Carlo convergence), AI decision engine (all 4 styles, think time, edge cases), game lifecycle (blinds, dealing, streets, showdown, side pots), betting validation (min raise, all-in edge cases), all-in blind dealing (exact, partial, showdown eligibility), undo/redo, turn order (preflop/postflop, skip folded/all-in), race conditions (stale state, game version, sequence numbers, caching), advisor (preflop/postflop analysis, performance, piggybacking), difficulty presets (Easy/Medium/Hard/Expert), stats dashboard (VPIP, WTSD, W$SD, win rate), hand history (hole cards, hand ranks, pot tracking), UI logic (computed properties, display helpers, card visibility, pass-and-play, slider snapping, bet presets, advisor refresh triggers), socket events (seq filtering, stale event rejection, reconnection, state recovery), AbortController cancellation, AI thinking indicator lifecycle, manual dealing, card assignment, player editing, history export, settings persistence, HTML feature completeness, and end-to-end browser tests (game flow, mobile viewport, sidebar navigation, animations, sound controls).
+162 Python unit + 22 Playwright E2E + 155 JavaScript = **339 tests** covering hand evaluation (all 10 ranks, wheel straights, 7-card best-of-21, tiebreakers), equity calculator (preflop lookup, Monte Carlo convergence), AI decision engine (all 4 styles + adaptive opponent modeling, think time), game lifecycle (blinds, dealing, streets, showdown, side pots), betting validation (min raise, all-in edge cases), all-in blind dealing (exact, partial, showdown eligibility), undo/redo, turn order (preflop/postflop, skip folded/all-in), race conditions (stale state, game version, sequence numbers, caching), advisor (preflop/postflop analysis, performance, piggybacking), preflop range charts (grid dimensions, position variation, hand mapping), tutorial system (concept triggers, progressive display, dismiss tracking), hand replayer (state reconstruction, step navigation, playback controls), difficulty presets (Easy/Medium/Hard/Expert), stats dashboard (VPIP, WTSD, W$SD, win rate), hand history (hole cards, hand ranks, pot tracking), UI logic (computed properties, display helpers, card visibility, pass-and-play, slider snapping, bet presets, advisor refresh triggers), socket events (seq filtering, stale event rejection, reconnection, state recovery), AbortController cancellation, AI thinking indicator lifecycle, manual dealing, card assignment, player editing, history export, settings persistence, HTML feature completeness, and end-to-end browser tests (game flow, mobile viewport, sidebar navigation, animations, sound controls).
 
 ## API Endpoints
 
@@ -229,6 +268,7 @@ npm test                       # 144 tests — UI logic, state management, socke
 | `POST` | `/api/update_player` | Edit player settings between hands |
 | `GET/POST` | `/api/settings` | Read or update game settings |
 | `GET` | `/api/difficulty_presets` | List available AI difficulty presets |
+| `GET` | `/api/preflop_ranges` | Preflop range grids for all positions |
 | `GET` | `/api/export_history` | Download hand history as text |
 
 ## How the Advisor Math Works
