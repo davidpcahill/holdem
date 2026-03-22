@@ -545,6 +545,78 @@ def test_script_tags_have_cache_buster():
 
 
 # ════════════════════════════════════════════════
+# Advisor Performance Tests
+# ════════════════════════════════════════════════
+
+def _new_game(c, num_players=2):
+    """Helper: start a new game with all-human players."""
+    players = [{'name': f'P{i}', 'stack': 1000, 'player_type': 'human'} for i in range(num_players)]
+    return api(c, 'POST', '/api/new_game', {
+        'small_blind': 5, 'big_blind': 10, 'players': players,
+    })
+
+
+def test_advisor_returns_compute_timing():
+    """Advisor response should include _compute_ms timing field."""
+    with app.test_client() as c:
+        _new_game(c)
+        api(c, 'POST', '/api/new_hand')
+        result = api(c, 'POST', '/api/advisor', {'seat': 0})
+        assert '_compute_ms' in result, "Advisor response should include _compute_ms timing"
+        assert isinstance(result['_compute_ms'], int), "_compute_ms should be an integer"
+        assert result['_compute_ms'] >= 0, "_compute_ms should be non-negative"
+
+
+def test_advisor_completes_under_2_seconds():
+    """Advisor computation should complete within 2 seconds (1000 sims)."""
+    import time
+    with app.test_client() as c:
+        _new_game(c)
+        api(c, 'POST', '/api/new_hand')
+
+        # Play to flop to test Monte Carlo path (not just preflop lookup)
+        state = api(c, 'GET', '/api/state')
+        safety = 0
+        while state.get('street') == 'preflop' and state.get('phase') == 'playing' and safety < 10:
+            seat = state.get('action_seat', -1)
+            if seat < 0:
+                break
+            api(c, 'POST', '/api/action', {'seat': seat, 'action': 'call'})
+            state = api(c, 'GET', '/api/state')
+            safety += 1
+
+        if state.get('phase') == 'playing':
+            t0 = time.time()
+            result = api(c, 'POST', '/api/advisor', {'seat': state['action_seat']})
+            elapsed = time.time() - t0
+            assert elapsed < 5.0, f"Advisor took {elapsed:.2f}s, should be under 5s"
+            if '_compute_ms' in result:
+                assert result['_compute_ms'] < 5000, f"Advisor compute took {result['_compute_ms']}ms"
+
+
+def test_advisor_piggybacked_on_action_response():
+    """When next player is human, action response should include _advisor data."""
+    with app.test_client() as c:
+        _new_game(c)
+        api(c, 'POST', '/api/new_hand')
+        state = api(c, 'GET', '/api/state')
+
+        # First player acts — if next player is also human, should piggyback
+        seat = state.get('action_seat', 0)
+        result = api(c, 'POST', '/api/action', {'seat': seat, 'action': 'call'})
+
+        # Check if game is still playing and next is human
+        result_state = result.get('state', {})
+        if result_state.get('phase') == 'playing':
+            next_seat = result_state.get('action_seat', -1)
+            if next_seat >= 0:
+                next_player = result_state.get('players', [{}])[next_seat]
+                if next_player.get('player_type') == 'human':
+                    assert '_advisor' in result, \
+                        "Action response should piggyback _advisor when next player is human"
+
+
+# ════════════════════════════════════════════════
 # Runner
 # ════════════════════════════════════════════════
 

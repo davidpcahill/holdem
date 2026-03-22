@@ -37,6 +37,9 @@ document.addEventListener('alpine:init', () => {
         advisorLoading: false,
         advisorEnabled: true,
         _advisorFetchId: 0,
+        _advisorAbort: null,
+        _socketConnected: false,
+        _wasDisconnected: false,
 
         // Street tracking for sounds
         _lastStreet: '',
@@ -142,7 +145,36 @@ document.addEventListener('alpine:init', () => {
 
         connectSocket() {
             try {
-                this.socket = io({ transports: ['websocket', 'polling'] });
+                this.socket = io({
+                    transports: ['websocket', 'polling'],
+                    reconnection: true,
+                    reconnectionAttempts: Infinity,
+                    reconnectionDelay: 1000,
+                    reconnectionDelayMax: 5000,
+                });
+
+                // ── Connection lifecycle ──
+                this.socket.on('connect', () => {
+                    console.log('[socket] connected');
+                    this._socketConnected = true;
+                    // Re-fetch full state after reconnection to sync
+                    if (this._wasDisconnected) {
+                        console.log('[socket] reconnected — re-syncing state');
+                        this.loadState();
+                        this._wasDisconnected = false;
+                    }
+                });
+
+                this.socket.on('disconnect', (reason) => {
+                    console.warn('[socket] disconnected:', reason);
+                    this._socketConnected = false;
+                    this._wasDisconnected = true;
+                });
+
+                this.socket.on('connect_error', (err) => {
+                    console.warn('[socket] connection error:', err.message);
+                    this._socketConnected = false;
+                });
 
                 this.socket.on('state_update', (data) => {
                     // Ignore stale socket updates that arrive after newer HTTP responses
@@ -193,6 +225,8 @@ document.addEventListener('alpine:init', () => {
                 this.socket.on('advisor_update', (data) => {
                     if (this.advisorEnabled && this.canAct && !data.error) {
                         this.advisor = data;
+                        // Cancel any in-flight HTTP advisor fetch — socket push won
+                        this._advisorFetchId++;
                     }
                     this.advisorLoading = false;
                 });
@@ -410,14 +444,22 @@ document.addEventListener('alpine:init', () => {
                 this.advisorLoading = false;
                 return;
             }
+            // Cancel any in-flight advisor request
+            if (this._advisorAbort) {
+                this._advisorAbort.abort();
+                this._advisorAbort = null;
+            }
             // Generation counter: ignore responses from stale fetches
             const fetchId = ++this._advisorFetchId;
+            const controller = new AbortController();
+            this._advisorAbort = controller;
             this.advisorLoading = true;
             try {
                 const res = await fetch('/api/advisor', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ seat: this.state.action_seat }),
+                    signal: controller.signal,
                 });
                 const data = await res.json();
                 // Drop result if a newer fetch was started while we were waiting
@@ -426,11 +468,13 @@ document.addEventListener('alpine:init', () => {
                     this.advisor = data;
                 }
             } catch (e) {
+                if (e.name === 'AbortError') return;  // Cancelled — expected
                 if (fetchId !== this._advisorFetchId) return;
                 console.error('Advisor failed:', e);
             }
             if (fetchId === this._advisorFetchId) {
                 this.advisorLoading = false;
+                this._advisorAbort = null;
             }
         },
 
