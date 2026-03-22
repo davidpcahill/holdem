@@ -75,6 +75,10 @@ document.addEventListener('alpine:init', () => {
         chipAnimations: true,
         _prevPlayerBets: {},   // Track previous bets to detect changes
 
+        // Tutorial
+        tutorialMode: false,
+        tutorialDismissed: [],  // IDs of dismissed concepts
+
         // Settings (local copy, synced to server)
         localSettings: {
             difficulty: 'medium',
@@ -855,6 +859,46 @@ document.addEventListener('alpine:init', () => {
                 this.rangeCurrentHand = [Math.min(i1, i2), Math.max(i1, i2)]; // Suited above diagonal
             } else {
                 this.rangeCurrentHand = [Math.max(i1, i2), Math.min(i1, i2)]; // Offsuit below diagonal
+            }
+        },
+
+        // ── Tutorial ──
+
+        async startTutorialGame() {
+            // Configure an easy tutorial game with advisor on
+            this.tutorialMode = true;
+            this.tutorialDismissed = [];
+            this.advisorEnabled = true;
+            this.setupData = {
+                small_blind: 5,
+                big_blind: 10,
+                players: [
+                    { name: 'You', stack: 1000, player_type: 'human', ai_style: 'random', adaptive: false },
+                    { name: 'Tutorial Bot', stack: 1000, player_type: 'ai', ai_style: 'loose_passive', adaptive: false },
+                ],
+            };
+            // Set easy difficulty and tutorial mode on server
+            await fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    difficulty: 'easy',
+                    tutorial_mode: true,
+                    _tutorial_seen: [],
+                }),
+            });
+            this.startGame();
+        },
+
+        dismissTutorialTip(conceptId) {
+            if (!this.tutorialDismissed.includes(conceptId)) {
+                this.tutorialDismissed.push(conceptId);
+                // Sync to server
+                fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ _tutorial_seen: this.tutorialDismissed }),
+                });
             }
         },
 

@@ -1246,3 +1246,43 @@
 .range-legend.raise { background: rgba(46, 204, 113, 0.4); }
 .range-legend.call { background: rgba(241, 196, 15, 0.35); }
 .range-legend.fold { background: rgba(231, 76, 60, 0.2); }
+
+/* ── Tutorial Tip ── */
+.tutorial-tip {
+    display: flex;
+    flex-direction: column;
+    background: rgba(212, 168, 67, 0.08);
+    border: 1px solid rgba(212, 168, 67, 0.3);
+    border-radius: var(--radius-md);
+    padding: 10px 12px;
+    margin-bottom: 10px;
+    animation: tutorialFadeIn 0.3s ease-out;
+}
+.tutorial-tip-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+.tutorial-tip-badge {
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: var(--gold);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+}
+.tutorial-tip-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+.tutorial-tip-body {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+@keyframes tutorialFadeIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to { opacity: 1; transform: translateY(0); }
+}

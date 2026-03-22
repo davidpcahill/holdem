@@ -17,6 +17,7 @@ from engine.equity import EquityCalculator
 from engine.ai import AIEngine, AIDecision, DIFFICULTY_PRESETS
 from engine.advisor import Advisor
 from engine.ranges import get_range_grid, get_all_positions
+from engine.tutorial import get_tutorial_tip
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
@@ -47,6 +48,8 @@ settings = {
     "hide_hands": True,
     "peek_enabled": False,
     "burn_cards": True,
+    "tutorial_mode": False,
+    "_tutorial_seen": [],    # Track which concepts have been shown
 }
 
 
@@ -441,6 +444,14 @@ def _compute_advisor(seat: int) -> dict:
 
     result = advice.to_dict()
     result["_compute_ms"] = round((time.time() - t0) * 1000)
+
+    # Tutorial tip (if enabled in settings)
+    if settings.get("tutorial_mode"):
+        seen = settings.get("_tutorial_seen", [])
+        tip = get_tutorial_tip(result, game.street.value, position, game.hand_number, seen)
+        if tip:
+            result["tutorial"] = tip
+
     return result
 
 

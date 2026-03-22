@@ -469,6 +469,77 @@ def test_all_positions_exist():
     assert "BB" in positions
 
 
+# ========================================================================
+# Tutorial Tests
+# ========================================================================
+
+def test_tutorial_tip_first_always():
+    """First unseen concept with 'always' trigger is returned."""
+    from engine.tutorial import get_tutorial_tip
+    tip = get_tutorial_tip({"equity": {"win": 50}}, "preflop", "BTN", 1, [])
+    assert tip is not None
+    assert tip["id"] == "hand_strength"
+    assert "title" in tip
+    assert "explanation" in tip
+
+
+def test_tutorial_tip_skips_seen():
+    """Concepts already in seen_concepts are skipped."""
+    from engine.tutorial import get_tutorial_tip
+    tip = get_tutorial_tip(
+        {"equity": {"win": 50}}, "preflop", "BTN", 1, ["hand_strength"]
+    )
+    assert tip is not None
+    assert tip["id"] == "position"  # Next concept that matches
+
+
+def test_tutorial_tip_none_when_all_seen():
+    """Returns None when all concepts have been seen."""
+    from engine.tutorial import get_tutorial_tip, TUTORIAL_CONCEPTS
+    all_ids = [c["id"] for c in TUTORIAL_CONCEPTS]
+    tip = get_tutorial_tip({"equity": {"win": 50}}, "preflop", "BTN", 1, all_ids)
+    assert tip is None
+
+
+def test_tutorial_tip_none_without_advisor():
+    """Returns None when advisor_result is None."""
+    from engine.tutorial import get_tutorial_tip
+    tip = get_tutorial_tip(None, "preflop", "BTN", 1, [])
+    assert tip is None
+
+
+def test_tutorial_tip_pot_odds_trigger():
+    """Pot odds concept triggers when facing a bet."""
+    from engine.tutorial import get_tutorial_tip
+    seen = ["hand_strength", "position"]
+    tip = get_tutorial_tip(
+        {"pot_odds": 16.7, "equity": {"win": 40}}, "flop", "BTN", 3, seen
+    )
+    assert tip is not None
+    assert tip["id"] == "pot_odds"
+
+
+def test_tutorial_tip_outs_trigger():
+    """Outs concept triggers when outs count > 0."""
+    from engine.tutorial import get_tutorial_tip
+    seen = ["hand_strength", "position", "pot_odds"]
+    tip = get_tutorial_tip(
+        {"outs": {"count": 9, "draws": ["flush draw"]}}, "flop", "CO", 4, seen
+    )
+    assert tip is not None
+    assert tip["id"] == "outs"
+
+
+def test_tutorial_concepts_have_required_fields():
+    """Every concept has id, title, explanation, and trigger."""
+    from engine.tutorial import TUTORIAL_CONCEPTS
+    for concept in TUTORIAL_CONCEPTS:
+        assert "id" in concept, f"Missing id in concept"
+        assert "title" in concept, f"Missing title in {concept['id']}"
+        assert "explanation" in concept, f"Missing explanation in {concept['id']}"
+        assert "trigger" in concept, f"Missing trigger in {concept['id']}"
+
+
 # Runner
 # ========================================================================
 

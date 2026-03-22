@@ -180,6 +180,15 @@
                     <div x-show="!advisorEnabled" style="padding:20px;text-align:center;color:var(--text-muted);font-size:0.85rem">
                         Advisor is disabled. Enable it in Settings or the New Game dialog.
                     </div>
+                    <!-- Tutorial Tip -->
+                    <div class="tutorial-tip" x-show="tutorialMode && advisor?.tutorial && !tutorialDismissed.includes(advisor?.tutorial?.id)" x-cloak>
+                        <div class="tutorial-tip-header">
+                            <span class="tutorial-tip-badge">📖 Tutorial</span>
+                            <span class="tutorial-tip-title" x-text="advisor?.tutorial?.title"></span>
+                        </div>
+                        <div class="tutorial-tip-body" x-text="advisor?.tutorial?.explanation"></div>
+                        <button class="btn btn-sm btn-gold" @click="dismissTutorialTip(advisor?.tutorial?.id)" style="margin-top:6px;align-self:flex-start">Got it!</button>
+                    </div>
                     <div class="advisor-section" x-show="advisorEnabled && advisor" :style="advisorLoading ? 'opacity:0.4;pointer-events:none' : ''">
                         <!-- Equity bar -->
                         <div class="advisor-equity" x-show="advisor?.equity">
@@ -652,6 +661,10 @@
                             <label title="Animate chips flying from player to pot and back on wins">Chip Animations</label>
                             <label class="toggle"><input type="checkbox" x-model="chipAnimations"><span class="slider"></span></label>
                         </div>
+                        <div class="settings-row">
+                            <label title="Show contextual poker concept tips in the Advisor panel">Tutorial Tips</label>
+                            <label class="toggle"><input type="checkbox" x-model="tutorialMode" @change="fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tutorial_mode:tutorialMode})})"><span class="slider"></span></label>
+                        </div>
                     </div>
                     <div class="settings-group">
                         <div class="settings-group-title">Sound</div>
@@ -779,7 +792,13 @@
                         </label>
                     </div>
                 </div>
-                <div class="modal-footer"><button class="btn" @click="showSetup=false">Cancel</button><button class="btn btn-primary btn-lg" @click="startNewGame()">Start Game</button></div>
+                <div class="modal-footer">
+                    <button class="btn" @click="showSetup=false">Cancel</button>
+                    <div style="margin-left:auto;display:flex;gap:8px">
+                        <button class="btn btn-gold" @click="startTutorialGame()" title="Start a guided tutorial game with tips and an easy opponent">📖 Tutorial Game</button>
+                        <button class="btn btn-primary btn-lg" @click="startNewGame()">Start Game</button>
+                    </div>
+                </div>
             </div>
         </div>
 
