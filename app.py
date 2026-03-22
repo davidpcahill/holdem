@@ -60,12 +60,18 @@ def _get_full_state(viewer_seat=None):
 
 def _push_advisor_async(seat: int):
     """Compute and push advisor data in a background thread (outside _ai_lock)."""
+    version_at_call = _game_version
     def _do():
+        if _game_version != version_at_call:
+            return  # Game was reset, don't push stale advisor
         try:
             advisor_data = _compute_advisor(seat)
+            if _game_version != version_at_call:
+                return  # Game was reset during computation
             socketio.emit("advisor_update", advisor_data)
         except Exception:
-            socketio.emit("advisor_update", {"error": "failed"})
+            if _game_version == version_at_call:
+                socketio.emit("advisor_update", {"error": "failed"})
     threading.Thread(target=_do, daemon=True).start()
 
 
@@ -76,13 +82,14 @@ def _run_ai_turn():
     Only emits ai_action events — no redundant state_update emits that can race.
     """
     my_version = _game_version
+    my_game = game  # Capture local ref — prevents acting on a replaced game
     with _ai_lock:
-        while (game.phase == GamePhase.PLAYING
-               and game.action_seat >= 0
-               and game.action_seat < len(game.players)
+        while (my_game.phase == GamePhase.PLAYING
+               and my_game.action_seat >= 0
+               and my_game.action_seat < len(my_game.players)
                and _game_version == my_version):
 
-            player = game.players[game.action_seat]
+            player = my_game.players[my_game.action_seat]
             if player.player_type != PlayerType.AI:
                 break  # Human's turn — stop and wait
             if not player.is_active:
@@ -92,6 +99,8 @@ def _run_ai_turn():
             think_time = ai_engine.calculate_think_time(player)
 
             # Show "thinking" indicator BEFORE computation so UI is responsive
+            if _game_version != my_version:
+                break
             socketio.emit("ai_thinking", {
                 "seat": player.seat,
                 "name": player.name,
@@ -99,8 +108,8 @@ def _run_ai_turn():
             })
 
             # Get equity for AI decision
-            community = game.community_cards
-            num_opponents = len([p for p in game.players if p.is_in_hand and p.seat != player.seat])
+            community = my_game.community_cards
+            num_opponents = len([p for p in my_game.players if p.is_in_hand and p.seat != player.seat])
 
             if not community:
                 equity = EquityCalculator.preflop_equity(player.hole_cards, num_opponents)
@@ -110,8 +119,8 @@ def _run_ai_turn():
                 )
 
             # Get valid actions
-            valid = game.get_valid_actions(player.seat)
-            positions = game._get_positions()
+            valid = my_game.get_valid_actions(player.seat)
+            positions = my_game._get_positions()
             position = positions.get(player.seat, "")
 
             # Make decision
@@ -120,8 +129,8 @@ def _run_ai_turn():
                 valid_actions=valid,
                 equity=equity,
                 community_cards=community,
-                pot=game.pot,
-                street=game.street.value,
+                pot=my_game.pot,
+                street=my_game.street.value,
                 position=position,
                 num_opponents=num_opponents,
             )
@@ -134,16 +143,20 @@ def _run_ai_turn():
                 break
 
             # Capture street and community BEFORE action (to detect street changes)
-            pre_street = game.street.value
-            pre_community = [c.short for c in game.community_cards]
+            pre_street = my_game.street.value
+            pre_community = [c.short for c in my_game.community_cards]
 
             # Execute the action
-            result = game.process_action(player.seat, decision.action, decision.amount)
+            result = my_game.process_action(player.seat, decision.action, decision.amount)
 
             # Build the emit payload
             action_state = _get_full_state()
-            post_street = game.street.value
+            post_street = my_game.street.value
             street_changed = pre_street != post_street and post_street not in ('showdown', 'hand_over')
+
+            # Abort if game was reset during action processing
+            if _game_version != my_version:
+                break
 
             if street_changed:
                 # Strip new community cards from ai_action so flop/turn/river
@@ -164,6 +177,9 @@ def _run_ai_turn():
                 # Pause, then reveal the new street
                 reveal_ms = settings.get('street_reveal_ms', 800)
                 time.sleep(reveal_ms / 1000.0)
+
+                if _game_version != my_version:
+                    break
 
                 # Build fresh state with new _seq so it's never filtered as stale
                 reveal_state = _get_full_state()
@@ -186,14 +202,14 @@ def _run_ai_turn():
                 })
 
             # If hand ended, stop (no separate state_update — ai_action already has it)
-            if game.phase != GamePhase.PLAYING:
+            if my_game.phase != GamePhase.PLAYING:
                 break
 
             # If next player is human, push advisor in a separate thread
             # so we release _ai_lock immediately and don't block the UI
-            if (game.action_seat >= 0
-                    and game.action_seat < len(game.players)):
-                next_p = game.players[game.action_seat]
+            if (my_game.action_seat >= 0
+                    and my_game.action_seat < len(my_game.players)):
+                next_p = my_game.players[my_game.action_seat]
                 if next_p.player_type == PlayerType.HUMAN and next_p.hole_cards:
                     _push_advisor_async(next_p.seat)
                     break  # Human's turn — exit loop, next iteration would break anyway
