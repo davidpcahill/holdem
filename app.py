@@ -27,7 +27,6 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 # ──────────────────────────────────────────────
 game = GameState()
 ai_engine = AIEngine(timing_preset="realistic", variance=0.3)
-_equity_cache = {}
 _ai_lock = threading.Lock()
 _game_version = 0  # Incremented on new game; AI threads check this to abort
 
@@ -54,6 +53,17 @@ def _get_full_state(viewer_seat=None):
     return state
 
 
+def _push_advisor_async(seat: int):
+    """Compute and push advisor data in a background thread (outside _ai_lock)."""
+    def _do():
+        try:
+            advisor_data = _compute_advisor(seat)
+            socketio.emit("advisor_update", advisor_data)
+        except Exception:
+            socketio.emit("advisor_update", {"error": "failed"})
+    threading.Thread(target=_do, daemon=True).start()
+
+
 def _run_ai_turn():
     """
     Process AI player turns in sequence.
@@ -75,6 +85,13 @@ def _run_ai_turn():
 
             # Calculate think time
             think_time = ai_engine.calculate_think_time(player)
+
+            # Show "thinking" indicator BEFORE computation so UI is responsive
+            socketio.emit("ai_thinking", {
+                "seat": player.seat,
+                "name": player.name,
+                "think_time": think_time,
+            })
 
             # Get equity for AI decision
             community = game.community_cards
@@ -104,12 +121,7 @@ def _run_ai_turn():
                 num_opponents=num_opponents,
             )
 
-            # Wait for think time (emit "thinking" state)
-            socketio.emit("ai_thinking", {
-                "seat": player.seat,
-                "name": player.name,
-                "think_time": think_time,
-            })
+            # Wait for remaining think time
             time.sleep(think_time)
 
             # Abort if game was reset during think time
@@ -127,18 +139,7 @@ def _run_ai_turn():
             post_street = game.street.value
             street_changed = pre_street != post_street and post_street not in ('showdown', 'hand_over')
 
-            # If next player is human, piggyback advisor
-            if (game.phase == GamePhase.PLAYING
-                    and game.action_seat >= 0
-                    and game.action_seat < len(game.players)):
-                next_p = game.players[game.action_seat]
-                if next_p.player_type == PlayerType.HUMAN and next_p.hole_cards:
-                    try:
-                        action_state["_advisor"] = _compute_advisor(next_p.seat)
-                    except Exception:
-                        pass
-
-            # Single emit per action — the ONLY state push during AI play
+            # Emit action immediately — don't block on advisor computation
             socketio.emit("ai_action", {
                 "seat": player.seat,
                 "name": player.name,
@@ -152,9 +153,22 @@ def _run_ai_turn():
             if game.phase != GamePhase.PLAYING:
                 break
 
-            # Pause between AI actions for readability
-            # Longer pause when street changed so frontend can show the transition
-            time.sleep(0.8 if street_changed else 0.2)
+            # If next player is human, push advisor in a separate thread
+            # so we release _ai_lock immediately and don't block the UI
+            if (game.action_seat >= 0
+                    and game.action_seat < len(game.players)):
+                next_p = game.players[game.action_seat]
+                if next_p.player_type == PlayerType.HUMAN and next_p.hole_cards:
+                    _push_advisor_async(next_p.seat)
+                    break  # Human's turn — exit loop, next iteration would break anyway
+
+            # Pause between AI actions
+            # Use street_reveal_ms + buffer so frontend can animate the transition
+            if street_changed:
+                reveal_ms = settings.get('street_reveal_ms', 800)
+                time.sleep((reveal_ms / 1000.0) + 0.5)
+            else:
+                time.sleep(0.2)
 
 
 # ──────────────────────────────────────────────
@@ -360,6 +374,10 @@ def api_deal_card():
 @app.route("/api/undo", methods=["POST"])
 def api_undo():
     """Undo last action."""
+    if (game.phase == GamePhase.PLAYING
+            and 0 <= game.action_seat < len(game.players)
+            and game.players[game.action_seat].player_type == PlayerType.AI):
+        return jsonify({"error": "Cannot undo during AI turn"}), 409
     result = game.undo_action()
     if "error" in result:
         return jsonify(result), 400
@@ -369,6 +387,10 @@ def api_undo():
 @app.route("/api/undo_hand", methods=["POST"])
 def api_undo_hand():
     """Undo entire current hand."""
+    if (game.phase == GamePhase.PLAYING
+            and 0 <= game.action_seat < len(game.players)
+            and game.players[game.action_seat].player_type == PlayerType.AI):
+        return jsonify({"error": "Cannot undo during AI turn"}), 409
     result = game.undo_hand()
     if "error" in result:
         return jsonify(result), 400

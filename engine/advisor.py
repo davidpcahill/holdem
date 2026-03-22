@@ -151,13 +151,7 @@ class Advisor:
         # --- Hand evaluation ---
         t0 = _time.perf_counter()
         all_cards = hole_cards + community
-        if community and len(all_cards) >= 5:
-            hand_result = HandEvaluator.evaluate(all_cards)
-            result.hand_name = hand_result.name
-            result.hand_rank = hand_result.rank.name
-            result.draw_description = HandEvaluator.describe_best_draw(hole_cards, community)
-            result.best_hand_cards = [c.to_dict() for c in hand_result.cards]
-        elif community and len(all_cards) >= 2:
+        if community:
             hand_result = HandEvaluator.evaluate(all_cards)
             result.hand_name = hand_result.name
             result.hand_rank = hand_result.rank.name
