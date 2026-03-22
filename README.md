@@ -11,7 +11,7 @@ A local web-based Texas Hold'em game with AI opponents and a real-time strategy 
 
 Built with Python/Flask backend and vanilla JS frontend. No databases, no accounts, no external dependencies beyond Flask. Runs entirely on your machine.
 
-![Python](https://img.shields.io/badge/Python-3.10+-blue) ![Flask](https://img.shields.io/badge/Flask-3.0+-green) ![Tests](https://img.shields.io/badge/Tests-112%20passing-brightgreen)
+![Python](https://img.shields.io/badge/Python-3.10+-blue) ![Flask](https://img.shields.io/badge/Flask-3.0+-green) ![Tests](https://img.shields.io/badge/Tests-257%20passing-brightgreen)
 
 ## Quick Start
 
@@ -44,7 +44,7 @@ Open **http://localhost:5000** in your browser.
 ### Strategy Advisor
 Real-time recommendations for human players based on standard poker math:
 
-- **Equity**: Monte Carlo simulation (5000+ iterations post-flop) + instant preflop lookup table (169 canonical hands)
+- **Equity**: Monte Carlo simulation (1000 iterations post-flop) + instant preflop lookup table (169 canonical hands)
 - **Best Hand**: Shows your current best 5-card hand with colored mini-card display
 - **Outs**: Count with draw identification (flush draw, open-ended straight, gutshot, overcards)
 - **Pot Odds**: Required equity to call, displayed as ratio
@@ -125,7 +125,9 @@ All synthesized via Web Audio API — no external audio files:
 
 **AI Actions**: Run in background threads via SocketIO, pushing state updates as each AI player acts. A game version counter prevents stale threads from interfering after New Game.
 
-**Equity Calculator**: Preflop uses a lookup table of 169 canonical starting hands for instant results. Post-flop runs Monte Carlo simulation (5000 iterations) in a background thread.
+**Equity Calculator**: Preflop uses a lookup table of 169 canonical starting hands for instant results. Post-flop runs Monte Carlo simulation (1000 iterations for advisor, 500 for AI decisions) in a background thread.
+
+**Resilience**: Socket.IO auto-reconnects with exponential backoff. State is re-synced on reconnect. AbortController cancels stale HTTP advisor fetches. Socket-pushed advisor data cancels redundant HTTP requests.
 
 ```
 holdem/
@@ -156,12 +158,13 @@ holdem/
 └── tests/
     ├── test_engine.py         # 49 tests: cards, deck, all hand ranks, kickers, equity
     ├── test_game.py           # 38 tests: game lifecycle, side pots, undo, turn order
-    ├── test_api.py            # 24 tests: REST endpoints, race conditions, caching
+    ├── test_api.py            # 27 tests: REST endpoints, race conditions, caching, advisor perf
     ├── test_ai.py             # 6 tests: AI decision engine, think time, styles
     ├── test_turn_order.py     # 12 tests: turn order, socket events, race conditions
     ├── test_final.py          # Integration: showdown, card reveal, game-over
     └── js/
-        └── poker-logic.test.js # 95 tests: UI logic, state management, advisor refresh
+        ├── poker-logic.test.js # 95 tests: UI logic, state management, advisor refresh
+        └── app-socket.test.js  # 30 tests: socket events, reconnection, advisor fetch
 ```
 
 ## Tests
@@ -169,14 +172,14 @@ holdem/
 ```bash
 python tests/test_engine.py    # 49 tests — card primitives, hand evaluation, equity
 python tests/test_game.py      # 38 tests — game state machine, side pots, undo, turn order
-python tests/test_api.py       # 24 tests — REST endpoints, race conditions, caching
+python tests/test_api.py       # 27 tests — REST endpoints, race conditions, advisor perf
 python tests/test_ai.py        # 6 tests — AI decision engine, styles, think time
 python tests/test_turn_order.py # 12 tests — turn order, socket events
 python tests/test_final.py     # Integration — showdown, game-over, exports
-npm test                       # 95 tests — UI logic, state management, advisor refresh
+npm test                       # 125 tests — UI logic, state management, socket, reconnection
 ```
 
-224 tests (129 Python + 95 JavaScript) covering hand evaluation (all 10 ranks, wheel straights, 7-card best-of-21, tiebreakers), equity calculator (preflop lookup, Monte Carlo convergence), AI decision engine (all 4 styles, think time, edge cases), game lifecycle (blinds, dealing, streets, showdown, side pots), betting validation (min raise, all-in edge cases), undo/redo, turn order (preflop/postflop, skip folded/all-in), race conditions (stale state, game version, sequence numbers, caching), advisor (preflop/postflop analysis), UI logic (computed properties, display helpers, card visibility, pass-and-play, slider snapping, bet presets, advisor refresh triggers), manual dealing, card assignment, player editing, history export, settings persistence, and HTML feature completeness.
+257 tests (132 Python + 125 JavaScript) covering hand evaluation (all 10 ranks, wheel straights, 7-card best-of-21, tiebreakers), equity calculator (preflop lookup, Monte Carlo convergence), AI decision engine (all 4 styles, think time, edge cases), game lifecycle (blinds, dealing, streets, showdown, side pots), betting validation (min raise, all-in edge cases), undo/redo, turn order (preflop/postflop, skip folded/all-in), race conditions (stale state, game version, sequence numbers, caching), advisor (preflop/postflop analysis, performance, piggybacking), UI logic (computed properties, display helpers, card visibility, pass-and-play, slider snapping, bet presets, advisor refresh triggers), socket events (seq filtering, stale event rejection, reconnection, state recovery), AbortController cancellation, AI thinking indicator lifecycle, manual dealing, card assignment, player editing, history export, settings persistence, and HTML feature completeness.
 
 ## API Endpoints
 

@@ -117,7 +117,7 @@ def _run_ai_turn():
                 equity = EquityCalculator.preflop_equity(player.hole_cards, num_opponents)
             else:
                 equity = EquityCalculator.monte_carlo(
-                    player.hole_cards, community, num_opponents, simulations=2000
+                    player.hole_cards, community, num_opponents, simulations=500
                 )
 
             # Get valid actions
@@ -371,6 +371,7 @@ def api_advisor():
     seat = data.get("seat", 0)
     try:
         result = _compute_advisor(seat)
+        app.logger.debug("Advisor computed in %dms for seat %d", result.get("_compute_ms", -1), seat)
         return jsonify(result)
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
@@ -378,6 +379,7 @@ def api_advisor():
 
 def _compute_advisor(seat: int) -> dict:
     """Compute advisor data for a given seat. Used by API and socket push."""
+    t0 = time.time()
     if seat >= len(game.players):
         raise ValueError("Invalid seat")
 
@@ -392,7 +394,7 @@ def _compute_advisor(seat: int) -> dict:
         equity = EquityCalculator.preflop_equity(player.hole_cards, opponents)
     else:
         equity = EquityCalculator.monte_carlo(
-            player.hole_cards, community, opponents, simulations=5000
+            player.hole_cards, community, opponents, simulations=1000
         )
 
     valid = game.get_valid_actions(seat)
@@ -412,7 +414,9 @@ def _compute_advisor(seat: int) -> dict:
         equity=equity,
     )
 
-    return advice.to_dict()
+    result = advice.to_dict()
+    result["_compute_ms"] = round((time.time() - t0) * 1000)
+    return result
 
 
 @app.route("/api/deal_card", methods=["POST"])
