@@ -11,7 +11,7 @@ A local web-based Texas Hold'em game with AI opponents and a real-time strategy 
 
 Built with Python/Flask backend and vanilla JS frontend. No databases, no accounts, no external dependencies beyond Flask. Runs entirely on your machine.
 
-![Python](https://img.shields.io/badge/Python-3.10+-blue) ![Flask](https://img.shields.io/badge/Flask-3.0+-green) ![Tests](https://img.shields.io/badge/Tests-293%20passing-brightgreen)
+![Python](https://img.shields.io/badge/Python-3.10+-blue) ![Flask](https://img.shields.io/badge/Flask-3.0+-green) ![Tests](https://img.shields.io/badge/Tests-320%20passing-brightgreen)
 
 ## Quick Start
 
@@ -106,6 +106,7 @@ All synthesized via Web Audio API — no external audio files:
 - Card deals, chip bets, checks, folds, street reveals
 - Win fanfare (ascending triad)
 - Pass-and-play countdown ticks
+- Volume slider in Settings (persists across sessions)
 - On by default, toggle via toolbar or `M` key
 
 ### Animations
@@ -123,6 +124,7 @@ CSS keyframe animations for a polished feel:
 - **AI Difficulty**: Easy / Medium / Hard / Expert (or Custom for manual tuning)
 - **Advisor Precision**: Configurable Monte Carlo simulation count (100–5000)
 - AI speed preset and variance (visible in Custom mode)
+- Sound volume slider
 - Burn cards toggle
 - Card Picker mode
 - Advisor on/off
@@ -164,7 +166,7 @@ holdem/
 │   ├── hand_eval.py           # Exhaustive 7-choose-5 evaluator, all 10 hand ranks
 │   ├── player.py              # Player model, AI styles, stats tracking
 │   ├── betting.py             # Betting round validation, side pot calculator
-│   ├── game.py                # Game state machine (~930 lines)
+│   ├── game.py                # Game state machine (~990 lines)
 │   ├── equity.py              # Monte Carlo + preflop lookup table
 │   ├── ai.py                  # AI decision engine (4 styles)
 │   └── advisor.py             # Outs, pot odds, EV, action recommendations
@@ -182,7 +184,7 @@ holdem/
 │   └── index.html             # Single-page app shell
 └── tests/
     ├── test_engine.py         # 49 tests: cards, deck, all hand ranks, kickers, equity
-    ├── test_game.py           # 38 tests: game lifecycle, side pots, undo, turn order
+    ├── test_game.py           # 43 tests: game lifecycle, side pots, undo, turn order, all-in blinds
     ├── test_api.py            # 34 tests: REST endpoints, race conditions, caching, advisor, difficulty, stats
     ├── test_ai.py             # 6 tests: AI decision engine, think time, styles
     ├── test_turn_order.py     # 12 tests: turn order, socket events, race conditions
@@ -199,7 +201,7 @@ holdem/
 
 ```bash
 python tests/test_engine.py    # 49 tests — card primitives, hand evaluation, equity
-python tests/test_game.py      # 38 tests — game state machine, side pots, undo, turn order
+python tests/test_game.py      # 43 tests — game state machine, side pots, undo, turn order, all-in blinds
 python tests/test_api.py       # 34 tests — REST endpoints, race conditions, advisor, difficulty, stats
 python tests/test_ai.py        # 6 tests — AI decision engine, styles, think time
 python tests/test_turn_order.py # 12 tests — turn order, socket events
@@ -208,7 +210,7 @@ pytest tests/test_e2e.py       # 22 tests — Playwright E2E (requires: pip inst
 npm test                       # 144 tests — UI logic, state management, socket, features
 ```
 
-293 tests (149 Python + 144 JavaScript) covering hand evaluation (all 10 ranks, wheel straights, 7-card best-of-21, tiebreakers), equity calculator (preflop lookup, Monte Carlo convergence), AI decision engine (all 4 styles, think time, edge cases), game lifecycle (blinds, dealing, streets, showdown, side pots), betting validation (min raise, all-in edge cases), undo/redo, turn order (preflop/postflop, skip folded/all-in), race conditions (stale state, game version, sequence numbers, caching), advisor (preflop/postflop analysis, performance, piggybacking), difficulty presets (Easy/Medium/Hard/Expert), stats dashboard (VPIP, WTSD, W$SD, win rate), hand history (hole cards, hand ranks, pot tracking), UI logic (computed properties, display helpers, card visibility, pass-and-play, slider snapping, bet presets, advisor refresh triggers), socket events (seq filtering, stale event rejection, reconnection, state recovery), AbortController cancellation, AI thinking indicator lifecycle, manual dealing, card assignment, player editing, history export, settings persistence, HTML feature completeness, and end-to-end browser tests (game flow, mobile viewport, sidebar navigation, animations, sound controls).
+320 tests (154 Python unit + 22 Playwright E2E + 144 JavaScript) covering hand evaluation (all 10 ranks, wheel straights, 7-card best-of-21, tiebreakers), equity calculator (preflop lookup, Monte Carlo convergence), AI decision engine (all 4 styles, think time, edge cases), game lifecycle (blinds, dealing, streets, showdown, side pots), betting validation (min raise, all-in edge cases), all-in blind dealing (exact, partial, showdown eligibility), undo/redo, turn order (preflop/postflop, skip folded/all-in), race conditions (stale state, game version, sequence numbers, caching), advisor (preflop/postflop analysis, performance, piggybacking), difficulty presets (Easy/Medium/Hard/Expert), stats dashboard (VPIP, WTSD, W$SD, win rate), hand history (hole cards, hand ranks, pot tracking), UI logic (computed properties, display helpers, card visibility, pass-and-play, slider snapping, bet presets, advisor refresh triggers), socket events (seq filtering, stale event rejection, reconnection, state recovery), AbortController cancellation, AI thinking indicator lifecycle, manual dealing, card assignment, player editing, history export, settings persistence, HTML feature completeness, and end-to-end browser tests (game flow, mobile viewport, sidebar navigation, animations, sound controls).
 
 ## API Endpoints
 
