@@ -141,6 +141,7 @@ class Card:
             "short": self.short,
             "display": f"{RANK_DISPLAY[self.rank]}{SUIT_SYMBOLS[self.suit]}",
             "is_red": self.is_red,
+            "suit_name": self.suit.name.lower(),  # clubs, diamonds, hearts, spades
         }
 
     @staticmethod

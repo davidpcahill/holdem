@@ -29,6 +29,7 @@ document.addEventListener('alpine:init', () => {
         mobileSidebar: false,
         soundEnabled: true,
         soundVolume: 30,
+        cardTheme: localStorage.getItem('cardTheme') || 'classic',
 
         // Card picker
         pickerTarget: 'community',

@@ -291,3 +291,59 @@ input[type="range"]::-webkit-slider-thumb {
 .fill.fill-gold { background: var(--gold); }
 .fill.fill-red { background: var(--red-accent); }
 .fill.fill-blue { background: var(--blue-accent); }
+
+/* ============================================
+   Card Deck Themes
+   Applied via [data-card-theme] on #app
+   ============================================ */
+
+/* Four-Color: clubs=green, diamonds=blue, hearts=red, spades=black */
+[data-card-theme="fourcolor"] .playing-card.suit-clubs { color: #1a8a1a; }
+[data-card-theme="fourcolor"] .playing-card.suit-diamonds { color: #2266dd; }
+[data-card-theme="fourcolor"] .playing-card.suit-hearts { color: var(--card-red); }
+[data-card-theme="fourcolor"] .playing-card.suit-spades { color: var(--card-black); }
+
+/* Dark: dark card faces, softer colors */
+[data-card-theme="dark"] .playing-card {
+    --card-bg: #2a2a2a;
+    --card-border: #444;
+    background: var(--card-bg);
+    border-color: var(--card-border);
+}
+[data-card-theme="dark"] .playing-card.red { color: #ff6b6b; }
+[data-card-theme="dark"] .playing-card.black { color: #ddd; }
+[data-card-theme="dark"] .playing-card.suit-clubs { color: #ddd; }
+[data-card-theme="dark"] .playing-card.suit-diamonds { color: #ff6b6b; }
+[data-card-theme="dark"] .playing-card.suit-hearts { color: #ff6b6b; }
+[data-card-theme="dark"] .playing-card.suit-spades { color: #ddd; }
+
+/* Minimal: flat, no shadows, thin borders */
+[data-card-theme="minimal"] .playing-card {
+    background: #f8f8f8;
+    border: 1px solid #e0e0e0;
+    box-shadow: none;
+    border-radius: 4px;
+}
+[data-card-theme="minimal"] .playing-card:hover {
+    box-shadow: none;
+    transform: none;
+}
+[data-card-theme="minimal"] .playing-card .card-suit-center { opacity: 0.5; }
+
+/* Royal: gold accent cards with deep purple backs */
+[data-card-theme="royal"] .playing-card {
+    border-color: #c8a84e;
+    box-shadow: 0 2px 8px rgba(200, 168, 78, 0.2);
+}
+[data-card-theme="royal"] .playing-card.card-back {
+    background: #2d1854;
+    border-color: #c8a84e;
+}
+[data-card-theme="royal"] .playing-card.card-back::before {
+    border-color: #c8a84e;
+    background: repeating-linear-gradient(
+        45deg, transparent, transparent 4px,
+        rgba(200, 168, 78, 0.2) 4px, rgba(200, 168, 78, 0.2) 5px
+    );
+}
+[data-card-theme="royal"] .playing-card.card-back::after { color: #c8a84e; }
