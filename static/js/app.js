@@ -90,7 +90,7 @@ document.addEventListener('alpine:init', () => {
             escalate_interval: 10,
             escalate_multiplier: 1.5,
             pass_play_seconds: 3,
-            auto_advance: false,
+            auto_advance: true,
             auto_advance_delay: 5,
         },
 
@@ -403,13 +403,17 @@ document.addEventListener('alpine:init', () => {
                 const res = await fetch('/api/new_hand', { method: 'POST' });
                 const data = await res.json();
                 if (data.ok) {
-                    // Clear stale state BEFORE applying new state
+                    // Always clear showdown overlay
                     this.showdown = null;
-                    this.advisor = null;
-                    this.advisorLoading = false;
-                    this._advisorFetchId++;  // Invalidate in-flight advisor fetches
-                    this.aiThinkingSeat = -1;
-                    this.updateState(data.state);
+                    // Only apply HTTP state if AI hasn't already pushed newer state
+                    // via socket while we were awaiting the response
+                    if (!data.state?._seq || data.state._seq >= this._lastSeq) {
+                        this.advisor = null;
+                        this.advisorLoading = false;
+                        this._advisorFetchId++;
+                        this.aiThinkingSeat = -1;
+                        this.updateState(data.state);
+                    }
                 }
             } catch (e) { console.error('New hand failed:', e); }
         },
