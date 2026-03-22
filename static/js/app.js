@@ -256,6 +256,7 @@ document.addEventListener('alpine:init', () => {
             const turnChanged = this.state.action_seat !== prevActionSeat;
             const newHand = this.state.hand_number !== prevHandNum;
             const playersChanged = (this.state.players || []).filter(p => !p.is_folded && !p.is_sitting_out).length !== prevInHand;
+            const streetChanged = data.street && data.street !== this._lastStreet;
 
             // Reset slider on new hand or turn change
             if (turnChanged || newHand) {
@@ -272,11 +273,14 @@ document.addEventListener('alpine:init', () => {
                 if (data._advisor && this.advisorEnabled) {
                     this.advisor = data._advisor;
                     this.advisorLoading = false;
-                } else if (!this.advisorLoading && !this.advisor && this.advisorEnabled) {
-                    // Fallback: fetch via HTTP only if no data and not already loading
-                    this.fetchAdvisor();
-                } else if ((turnChanged || playersChanged) && this.advisorEnabled && !this.advisorLoading) {
-                    // Refetch if situation changed but no push data
+                } else if (turnChanged || streetChanged || playersChanged || newHand) {
+                    // Situation changed — clear stale advisor and request fresh data
+                    this.advisor = null;
+                    if (this.advisorEnabled && !this.advisorLoading) {
+                        this.fetchAdvisor();
+                    }
+                } else if (!this.advisor && !this.advisorLoading && this.advisorEnabled) {
+                    // No advisor yet and not loading — fetch as fallback
                     this.fetchAdvisor();
                 }
                 this.checkPassPlay();

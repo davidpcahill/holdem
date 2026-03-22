@@ -432,6 +432,118 @@ def test_undo_hand_blocked_during_ai_turn():
 
 
 # ════════════════════════════════════════════════
+# Race Condition & Caching Tests
+# ════════════════════════════════════════════════
+
+def test_new_game_during_hand_does_not_carry_old_state():
+    """Starting a new game mid-hand should fully reset — no old cards or actions."""
+    with app.test_client() as c:
+        # Start first game and play into a hand
+        api(c, 'POST', '/api/new_game', {
+            'small_blind': 5, 'big_blind': 10,
+            'players': [
+                {'name': 'A', 'stack': 1000, 'player_type': 'human'},
+                {'name': 'B', 'stack': 1000, 'player_type': 'human'},
+            ]
+        })
+        api(c, 'POST', '/api/new_hand')
+        s1 = api(c, 'GET', '/api/state')
+        assert s1['phase'] == 'playing'
+        old_hand = s1['hand_number']
+
+        # Now start a completely new game mid-hand
+        api(c, 'POST', '/api/new_game', {
+            'small_blind': 10, 'big_blind': 20,
+            'players': [
+                {'name': 'X', 'stack': 2000, 'player_type': 'human'},
+                {'name': 'Y', 'stack': 2000, 'player_type': 'human'},
+            ]
+        })
+        s2 = api(c, 'GET', '/api/state')
+        # Should be fresh state, no cards, no old actions
+        assert s2['phase'] in ('setup', 'between_hands'), f"Phase should be reset, got {s2['phase']}"
+        assert s2['hand_number'] == 0, "Hand number should reset to 0"
+        assert s2['community_cards'] == [], "Community cards should be empty"
+        assert s2['current_actions'] == [], "Actions should be empty"
+        assert s2['big_blind'] == 20, "Should use new blinds"
+        assert s2['players'][0]['name'] == 'X', "Should have new players"
+
+
+def test_new_hand_after_new_game_gets_fresh_cards():
+    """Rapidly starting new game then new hand should deal fresh cards."""
+    with app.test_client() as c:
+        # First game + hand
+        api(c, 'POST', '/api/new_game', {
+            'small_blind': 5, 'big_blind': 10,
+            'players': [
+                {'name': 'A', 'stack': 1000, 'player_type': 'human'},
+                {'name': 'B', 'stack': 1000, 'player_type': 'human'},
+            ]
+        })
+        api(c, 'POST', '/api/new_hand')
+        s1 = api(c, 'GET', '/api/state')
+        old_cards = [p.get('hole_cards', []) for p in s1['players']]
+
+        # New game + new hand immediately
+        api(c, 'POST', '/api/new_game', {
+            'small_blind': 5, 'big_blind': 10,
+            'players': [
+                {'name': 'A', 'stack': 1000, 'player_type': 'human'},
+                {'name': 'B', 'stack': 1000, 'player_type': 'human'},
+            ]
+        })
+        d = api(c, 'POST', '/api/new_hand')
+        assert d['ok']
+        s2 = d['state']
+        assert s2['phase'] == 'playing'
+        assert s2['hand_number'] == 1
+        # Players should have cards
+        for p in s2['players']:
+            assert len(p.get('hole_cards', [])) == 2, f"{p['name']} should have 2 cards"
+
+
+def test_state_seq_increases_monotonically():
+    """_seq in state should increase on every state fetch."""
+    with app.test_client() as c:
+        api(c, 'POST', '/api/new_game', {
+            'small_blind': 5, 'big_blind': 10,
+            'players': [
+                {'name': 'A', 'stack': 1000, 'player_type': 'human'},
+                {'name': 'B', 'stack': 1000, 'player_type': 'human'},
+            ]
+        })
+        s1 = api(c, 'GET', '/api/state')
+        s2 = api(c, 'GET', '/api/state')
+        assert '_seq' in s1, "State should include _seq"
+        assert '_seq' in s2, "State should include _seq"
+        assert s2['_seq'] > s1['_seq'], f"_seq should increase: {s1['_seq']} -> {s2['_seq']}"
+
+        # After new hand, seq should be even higher
+        api(c, 'POST', '/api/new_hand')
+        s3 = api(c, 'GET', '/api/state')
+        assert s3['_seq'] > s2['_seq'], f"_seq after new_hand should increase: {s2['_seq']} -> {s3['_seq']}"
+
+
+def test_static_js_no_cache_headers():
+    """Static JS files should have no-cache headers to prevent stale code."""
+    with app.test_client() as c:
+        response = c.get('/static/js/app.js')
+        assert response.status_code == 200
+        cache_control = response.headers.get('Cache-Control', '')
+        # SEND_FILE_MAX_AGE_DEFAULT=0 should result in no-cache or max-age=0
+        assert 'no-cache' in cache_control.lower() or 'max-age=0' in cache_control, \
+            f"app.js should not be cached, got Cache-Control: {cache_control}"
+
+
+def test_script_tags_have_cache_buster():
+    """Script tags in index.html should have version query params."""
+    with app.test_client() as c:
+        html = c.get('/').data.decode()
+        assert 'app.js?v=' in html, "app.js should have cache-busting ?v= parameter"
+        assert 'sounds.js?v=' in html, "sounds.js should have cache-busting ?v= parameter"
+
+
+# ════════════════════════════════════════════════
 # Runner
 # ════════════════════════════════════════════════
 
