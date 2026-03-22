@@ -16,6 +16,7 @@ from engine.player import PlayerType, AIStyle
 from engine.equity import EquityCalculator
 from engine.ai import AIEngine, AIDecision, DIFFICULTY_PRESETS
 from engine.advisor import Advisor
+from engine.ranges import get_range_grid, get_all_positions
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
@@ -558,6 +559,15 @@ def api_settings():
 def api_difficulty_presets():
     """Return available difficulty presets for the setup UI."""
     return jsonify(DIFFICULTY_PRESETS)
+
+
+@app.route("/api/preflop_ranges")
+def api_preflop_ranges():
+    """Return preflop range chart grid for all positions."""
+    ranges = {}
+    for pos in get_all_positions():
+        ranges[pos] = get_range_grid(pos)
+    return jsonify({"positions": get_all_positions(), "ranges": ranges})
 
 
 @app.route("/api/update_player", methods=["POST"])

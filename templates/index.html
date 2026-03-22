@@ -305,6 +305,38 @@
                             <span>Deal a hand to see recommendations.</span>
                         </template>
                     </div>
+                    <!-- Preflop Range Chart (collapsible) -->
+                    <div x-show="advisorEnabled" style="border-top:1px solid var(--border-muted);padding-top:6px;margin-top:4px">
+                        <div @click="rangeOpen=!rangeOpen;if(rangeOpen&&!rangeData)fetchRanges()" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;padding:4px 0">
+                            <span style="font-size:0.7rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.3px">Preflop Ranges</span>
+                            <span style="font-size:0.7rem;color:var(--text-muted)" x-text="rangeOpen ? '▾' : '▸'"></span>
+                        </div>
+                        <div x-show="rangeOpen" x-collapse>
+                            <!-- Position selector -->
+                            <div style="display:flex;flex-wrap:wrap;gap:2px;margin-bottom:4px">
+                                <template x-for="pos in (rangePositions||[])" :key="'rp_'+pos">
+                                    <button class="btn btn-xs" :class="{'active': rangePosition===pos}" @click="rangePosition=pos;updateRangeGrid()" x-text="pos"></button>
+                                </template>
+                            </div>
+                            <!-- 13×13 Grid -->
+                            <div class="range-grid" x-show="rangeGrid">
+                                <template x-for="(row,ri) in (rangeGrid||[])" :key="'rr'+ri">
+                                    <template x-for="(cell,ci) in row" :key="'rc'+ri+'_'+ci">
+                                        <div class="range-cell"
+                                             :class="[cell.action, {'range-current': rangeCurrentHand && rangeCurrentHand[0]===ri && rangeCurrentHand[1]===ci}]"
+                                             :title="cell.hand + ' — ' + cell.equity.toFixed(1) + '% equity'"
+                                             x-text="cell.hand"></div>
+                                    </template>
+                                </template>
+                            </div>
+                            <!-- Legend -->
+                            <div style="display:flex;gap:8px;justify-content:center;margin-top:4px;font-size:0.6rem;color:var(--text-muted)">
+                                <span><span class="range-legend raise"></span> Raise</span>
+                                <span><span class="range-legend call"></span> Call</span>
+                                <span><span class="range-legend fold"></span> Fold</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <!-- Log -->
                 <div class="sidebar-panel" :class="{active:sidebarTab==='log'}">

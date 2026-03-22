@@ -412,6 +412,63 @@ def test_preflop_equity_multiway():
 
 
 # ========================================================================
+# ========================================================================
+# Preflop Range Charts
+# ========================================================================
+
+def test_range_grid_dimensions():
+    """Range grid is 13×13 with correct cell structure."""
+    from engine.ranges import get_range_grid
+    grid = get_range_grid("BTN")
+    assert len(grid) == 13
+    for row in grid:
+        assert len(row) == 13
+    cell = grid[0][0]
+    assert "hand" in cell
+    assert "equity" in cell
+    assert "action" in cell
+    assert cell["hand"] == "AA"
+
+
+def test_range_grid_actions():
+    """Range grid has raise/call/fold actions based on position."""
+    from engine.ranges import get_range_grid
+    grid = get_range_grid("BTN")
+    # AA should always be raise from any position
+    assert grid[0][0]["action"] == "raise"
+    # Weak hand should be fold
+    assert grid[12][11]["action"] == "fold"  # 32o
+
+
+def test_range_positions_differ():
+    """Different positions produce different grids (tighter UTG)."""
+    from engine.ranges import get_range_grid
+    utg = get_range_grid("UTG")
+    btn = get_range_grid("BTN")
+    utg_raises = sum(1 for r in utg for c in r if c["action"] == "raise")
+    btn_raises = sum(1 for r in btn for c in r if c["action"] == "raise")
+    assert btn_raises > utg_raises, "BTN should have more raises than UTG"
+
+
+def test_hand_key_mapping():
+    """hand_key correctly maps grid positions to hand names."""
+    from engine.ranges import hand_key
+    assert hand_key(0, 0) == "AA"     # Diagonal = pair
+    assert hand_key(0, 1) == "AKs"    # Above diagonal = suited
+    assert hand_key(1, 0) == "AKo"    # Below diagonal = offsuit
+    assert hand_key(12, 12) == "22"   # Last pair
+
+
+def test_all_positions_exist():
+    """All standard positions are available."""
+    from engine.ranges import get_all_positions
+    positions = get_all_positions()
+    assert len(positions) >= 8
+    assert "BTN" in positions
+    assert "UTG" in positions
+    assert "BB" in positions
+
+
 # Runner
 # ========================================================================
 

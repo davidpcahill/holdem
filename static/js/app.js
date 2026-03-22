@@ -62,6 +62,14 @@ document.addEventListener('alpine:init', () => {
         replayer: null,         // { hand, stepIndex, playing, speed, intervalId }
         replayerState: null,    // Computed replay state from buildReplayState()
 
+        // Preflop Range Chart
+        rangeOpen: false,
+        rangePosition: 'BTN',
+        rangePositions: [],
+        rangeGrid: null,
+        rangeData: null,        // Cached server response
+        rangeCurrentHand: null, // [row, col] of current hand on grid
+
         // Settings (local copy, synced to server)
         localSettings: {
             difficulty: 'medium',
@@ -334,6 +342,11 @@ document.addEventListener('alpine:init', () => {
             if (data.hand_number && data.hand_number !== this._lastHandNum) {
                 window.pokerSounds?.cardDeal();
                 this._lastHandNum = data.hand_number;
+            }
+
+            // Update range chart current hand highlight
+            if (this.rangeOpen && this.rangeGrid) {
+                this._updateRangeCurrentHand();
             }
         },
 
@@ -772,6 +785,62 @@ document.addEventListener('alpine:init', () => {
             this.replayerState = PokerLogic.buildReplayState(
                 this.replayer.hand, this.replayer.stepIndex
             );
+        },
+
+        // ── Preflop Range Chart ──
+
+        async fetchRanges() {
+            if (this.rangeData) {
+                this.updateRangeGrid();
+                return;
+            }
+            try {
+                const res = await fetch('/api/preflop_ranges');
+                this.rangeData = await res.json();
+                this.rangePositions = this.rangeData.positions || [];
+                if (!this.rangePositions.includes(this.rangePosition)) {
+                    this.rangePosition = this.rangePositions[0] || 'BTN';
+                }
+                this.updateRangeGrid();
+            } catch (e) { console.error('Failed to fetch ranges:', e); }
+        },
+
+        updateRangeGrid() {
+            if (!this.rangeData?.ranges) return;
+            this.rangeGrid = this.rangeData.ranges[this.rangePosition] || null;
+            this._updateRangeCurrentHand();
+        },
+
+        _updateRangeCurrentHand() {
+            // Highlight current hand on the range grid
+            const humanSeat = this.humanSeat;
+            const player = this.state.players?.[humanSeat];
+            if (!player?.hole_cards?.length || player.hole_cards.length < 2) {
+                this.rangeCurrentHand = null;
+                return;
+            }
+            const c1 = player.hole_cards[0];
+            const c2 = player.hole_cards[1];
+            if (!c1?.rank_display || !c2?.rank_display) {
+                this.rangeCurrentHand = null;
+                return;
+            }
+            // Map T/10 to T for grid lookup
+            const r1 = c1.rank_display === '10' ? 'T' : c1.rank_display;
+            const r2 = c2.rank_display === '10' ? 'T' : c2.rank_display;
+            const suited = c1.suit === c2.suit;
+            // Use PokerLogic if available, otherwise manual grid position calc
+            const ranks = ['A','K','Q','J','T','9','8','7','6','5','4','3','2'];
+            const i1 = ranks.indexOf(r1);
+            const i2 = ranks.indexOf(r2);
+            if (i1 < 0 || i2 < 0) { this.rangeCurrentHand = null; return; }
+            if (i1 === i2) {
+                this.rangeCurrentHand = [i1, i2]; // Pair
+            } else if (suited) {
+                this.rangeCurrentHand = [Math.min(i1, i2), Math.max(i1, i2)]; // Suited above diagonal
+            } else {
+                this.rangeCurrentHand = [Math.max(i1, i2), Math.min(i1, i2)]; // Offsuit below diagonal
+            }
         },
 
         // ── Hand History Navigation ──
