@@ -20,6 +20,7 @@ from engine.advisor import Advisor
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0  # No caching for static files in dev
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
 # ──────────────────────────────────────────────
@@ -164,10 +165,12 @@ def _run_ai_turn():
                 reveal_ms = settings.get('street_reveal_ms', 800)
                 time.sleep(reveal_ms / 1000.0)
 
+                # Build fresh state with new _seq so it's never filtered as stale
+                reveal_state = _get_full_state()
                 socketio.emit("street_reveal", {
                     "street": post_street,
-                    "community_cards": action_state["community_cards"],
-                    "state": action_state,
+                    "community_cards": reveal_state["community_cards"],
+                    "state": reveal_state,
                 })
 
                 # Extra pause after reveal before next AI acts
