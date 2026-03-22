@@ -659,3 +659,115 @@ describe('historyList', () => {
         expect(histories[0].hand_number).toBe(1);
     });
 });
+
+// ── Hand Replayer ──
+
+describe('buildReplayState', () => {
+    const sampleHand = {
+        hand_number: 1,
+        players: [
+            { seat: 0, name: 'Alice', stack: 1000, color: '#ff0000' },
+            { seat: 1, name: 'Bob', stack: 1000, color: '#0000ff' },
+        ],
+        community_cards: ['A♥', 'K♦', 'Q♠', 'J♣', '10♥'],
+        actions: [
+            { street: 'preflop', seat: 0, player_name: 'Alice', action: 'small_blind', amount: 5, is_all_in: false, pot_after: 5 },
+            { street: 'preflop', seat: 1, player_name: 'Bob', action: 'big_blind', amount: 10, is_all_in: false, pot_after: 15 },
+            { street: 'preflop', seat: 0, player_name: 'Alice', action: 'call', amount: 10, is_all_in: false, pot_after: 20 },
+            { street: 'preflop', seat: 1, player_name: 'Bob', action: 'check', amount: 0, is_all_in: false, pot_after: 20 },
+            { street: 'flop', seat: 1, player_name: 'Bob', action: 'bet', amount: 20, is_all_in: false, pot_after: 40 },
+            { street: 'flop', seat: 0, player_name: 'Alice', action: 'call', amount: 20, is_all_in: false, pot_after: 60 },
+            { street: 'turn', seat: 1, player_name: 'Bob', action: 'check', amount: 0, is_all_in: false, pot_after: 60 },
+            { street: 'turn', seat: 0, player_name: 'Alice', action: 'bet', amount: 40, is_all_in: false, pot_after: 100 },
+            { street: 'turn', seat: 1, player_name: 'Bob', action: 'fold', amount: 0, is_all_in: false, pot_after: 100 },
+        ],
+        winners: [{ seat: 0, name: 'Alice', amount: 100, hand_name: 'Pair' }],
+        hole_cards: { 0: ['A♠', 'K♣'], 1: ['2♥', '3♦'] },
+        hand_ranks: { 0: 'Pair of Aces', 1: 'High Card' },
+        pot_total: 100,
+    };
+
+    test('returns null for invalid input', () => {
+        expect(PokerLogic.buildReplayState(null, 0)).toBeNull();
+        expect(PokerLogic.buildReplayState({}, 0)).toBeNull();
+    });
+
+    test('step 0 shows initial state', () => {
+        const s = PokerLogic.buildReplayState(sampleHand, 0);
+        expect(s.players).toHaveLength(2);
+        expect(s.players[0].stack).toBe(1000);
+        expect(s.players[1].stack).toBe(1000);
+        expect(s.pot).toBe(0);
+        expect(s.communityCards).toHaveLength(0);
+        expect(s.isShowdown).toBe(false);
+    });
+
+    test('step 2 shows blinds posted', () => {
+        const s = PokerLogic.buildReplayState(sampleHand, 2);
+        expect(s.pot).toBe(15);
+        expect(s.players[0].stack).toBe(995);  // posted SB of 5
+        expect(s.players[1].stack).toBe(990);  // posted BB of 10
+        expect(s.street).toBe('preflop');
+        expect(s.communityCards).toHaveLength(0);
+    });
+
+    test('flop actions show 3 community cards', () => {
+        const s = PokerLogic.buildReplayState(sampleHand, 5);  // Into flop
+        expect(s.street).toBe('flop');
+        expect(s.communityCards).toHaveLength(3);
+        expect(s.communityCards[0]).toBe('A♥');
+    });
+
+    test('turn actions show 4 community cards', () => {
+        const s = PokerLogic.buildReplayState(sampleHand, 7);  // Into turn
+        expect(s.street).toBe('turn');
+        expect(s.communityCards).toHaveLength(4);
+    });
+
+    test('fold marks player as folded', () => {
+        const s = PokerLogic.buildReplayState(sampleHand, 9);  // After Bob folds
+        expect(s.players[1].is_folded).toBe(true);
+        expect(s.players[0].is_folded).toBe(false);
+    });
+
+    test('final step shows showdown with hole cards and winners', () => {
+        const s = PokerLogic.buildReplayState(sampleHand, sampleHand.actions.length);
+        expect(s.isShowdown).toBe(true);
+        expect(s.winners).toHaveLength(1);
+        expect(s.winners[0].name).toBe('Alice');
+        expect(s.players[0].hole_cards).toEqual(['A♠', 'K♣']);
+        expect(s.players[1].hole_cards).toEqual(['2♥', '3♦']);
+        expect(s.communityCards).toHaveLength(5);
+    });
+
+    test('does not mutate original hand data', () => {
+        const original = JSON.parse(JSON.stringify(sampleHand));
+        PokerLogic.buildReplayState(sampleHand, 5);
+        expect(sampleHand.players[0].stack).toBe(original.players[0].stack);
+    });
+
+    test('all-in flag is set correctly', () => {
+        const hand = {
+            ...sampleHand,
+            actions: [
+                { street: 'preflop', seat: 0, player_name: 'Alice', action: 'raise', amount: 1000, is_all_in: true, pot_after: 1000 },
+            ],
+        };
+        const s = PokerLogic.buildReplayState(hand, 1);
+        expect(s.players[0].is_all_in).toBe(true);
+        expect(s.players[0].stack).toBe(0);
+    });
+
+    test('totalSteps matches action count', () => {
+        const s = PokerLogic.buildReplayState(sampleHand, 0);
+        expect(s.totalSteps).toBe(sampleHand.actions.length);
+    });
+
+    test('street bets reset on new street', () => {
+        // At step 5 (first flop action: Bob bets 20), preflop bets should be cleared
+        const s = PokerLogic.buildReplayState(sampleHand, 5);
+        // Bob bet 20 on flop, Alice has no flop bet yet
+        expect(s.players[1].current_bet).toBe(20);
+        expect(s.players[0].current_bet).toBe(0);
+    });
+});

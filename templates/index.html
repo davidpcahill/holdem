@@ -167,6 +167,7 @@
             <div class="sidebar-tabs">
                 <div class="sidebar-tab" :class="{active:sidebarTab==='advisor'}" @click="sidebarTab='advisor'">Advisor</div>
                 <div class="sidebar-tab" :class="{active:sidebarTab==='log'}" @click="sidebarTab='log'">Log</div>
+                <div class="sidebar-tab" :class="{active:sidebarTab==='replay'}" @click="sidebarTab='replay'" x-show="state.hand_histories?.length">Replay</div>
                 <div class="sidebar-tab" :class="{active:sidebarTab==='stats'}" @click="sidebarTab='stats'">Stats</div>
                 <div class="sidebar-tab" :class="{active:sidebarTab==='settings'}" @click="sidebarTab='settings'">Settings</div>
             </div>
@@ -335,9 +336,12 @@
                         <!-- Previous hands history -->
                         <template x-for="(hand,hidx) in historyList" :key="'h'+hidx">
                             <div style="margin-bottom:12px;opacity:0.7">
-                                <div style="font-weight:600;font-size:0.7rem;color:var(--text-muted);letter-spacing:0.3px;padding-bottom:3px;border-bottom:1px solid var(--border-muted);margin-bottom:4px;display:flex;justify-content:space-between">
+                                <div style="font-weight:600;font-size:0.7rem;color:var(--text-muted);letter-spacing:0.3px;padding-bottom:3px;border-bottom:1px solid var(--border-muted);margin-bottom:4px;display:flex;justify-content:space-between;align-items:center">
                                     <span x-text="'HAND #' + hand.hand_number"></span>
-                                    <span x-text="(hand.winners||[]).map(w => w.name + ' +$' + w.amount).join(', ')" style="color:var(--green-accent)"></span>
+                                    <span style="display:flex;align-items:center;gap:6px">
+                                        <span x-text="(hand.winners||[]).map(w => w.name + ' +$' + w.amount).join(', ')" style="color:var(--green-accent)"></span>
+                                        <button class="btn btn-xs" @click="startReplay(hand.hand_number)" x-show="hand.players?.length" title="Replay this hand">▶</button>
+                                    </span>
                                 </div>
                                 <template x-for="(entry,eidx) in hand.actions" :key="'ha'+hidx+'_'+eidx">
                                     <div>
@@ -353,6 +357,110 @@
                         </template>
                     </div>
                 </div>
+                <!-- Hand Replayer -->
+                <div class="sidebar-panel" :class="{active:sidebarTab==='replay'}">
+                    <!-- Hand selector (when no replay active) -->
+                    <div x-show="!replayer">
+                        <div style="padding:12px 0 8px;font-size:0.8rem;color:var(--text-muted)" x-show="!state.hand_histories?.length">No completed hands to replay.</div>
+                        <div x-show="state.hand_histories?.length">
+                            <div style="font-size:0.75rem;font-weight:600;color:var(--gold);margin-bottom:8px">Select a hand to replay:</div>
+                            <template x-for="hand in historyList" :key="'rh'+hand.hand_number">
+                                <div class="replay-hand-item" @click="startReplay(hand.hand_number)">
+                                    <span style="font-weight:600">Hand #<span x-text="hand.hand_number"></span></span>
+                                    <span style="color:var(--green-accent);font-size:0.75rem" x-text="(hand.winners||[]).map(w => w.name + ' +$' + w.amount).join(', ')"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Active replay -->
+                    <div x-show="replayer && replayerState">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                            <span style="font-size:0.75rem;font-weight:600;color:var(--gold)">Hand #<span x-text="replayer?.hand?.hand_number"></span></span>
+                            <button class="btn btn-sm" @click="stopReplay()" title="Close replayer">✕ Close</button>
+                        </div>
+
+                        <!-- Street indicator -->
+                        <div style="text-align:center;margin-bottom:6px">
+                            <span class="replay-street-badge" x-text="(replayerState?.street || 'preflop').replace('_',' ').toUpperCase()"></span>
+                            <span x-show="replayerState?.isShowdown" class="badge badge-green" style="font-size:0.65rem;margin-left:4px">SHOWDOWN</span>
+                        </div>
+
+                        <!-- Community cards -->
+                        <div class="replay-community" style="display:flex;gap:3px;justify-content:center;margin-bottom:8px;min-height:36px">
+                            <template x-for="(card,ci) in (replayerState?.communityCards || [])" :key="'rc'+ci">
+                                <div class="replay-card" :class="['♥','♦'].includes(card[card.length-1]) ? 'red' : 'black'" x-text="card"></div>
+                            </template>
+                        </div>
+
+                        <!-- Pot -->
+                        <div style="text-align:center;font-size:0.8rem;font-weight:600;margin-bottom:8px">
+                            Pot: $<span x-text="replayerState?.pot || 0"></span>
+                        </div>
+
+                        <!-- Players -->
+                        <div class="replay-players">
+                            <template x-for="p in (replayerState?.players || [])" :key="'rp'+p.seat">
+                                <div class="replay-player" :class="{'replay-folded': p.is_folded, 'replay-winner': (replayerState?.winners||[]).some(w => w.seat === p.seat), 'replay-active': replayerState?.currentAction?.seat === p.seat}">
+                                    <div class="replay-player-name" :style="p.color ? 'color:'+p.color : ''" x-text="p.name"></div>
+                                    <div class="replay-player-stack">$<span x-text="p.stack"></span>
+                                        <span x-show="p.current_bet > 0" style="color:var(--orange-accent)"> (bet $<span x-text="p.current_bet"></span>)</span>
+                                        <span x-show="p.is_all_in" class="badge badge-red" style="font-size:0.55rem">ALL IN</span>
+                                    </div>
+                                    <div class="replay-player-cards" x-show="p.hole_cards?.length">
+                                        <template x-for="(c,ci) in (p.hole_cards||[])" :key="'rpc'+p.seat+'_'+ci">
+                                            <span class="replay-card replay-card-sm" :class="['♥','♦'].includes(c[c.length-1]) ? 'red' : 'black'" x-text="c"></span>
+                                        </template>
+                                        <span x-show="replayerState?.handRanks?.[p.seat]" style="font-size:0.6rem;color:var(--text-muted);margin-left:4px" x-text="replayerState?.handRanks?.[p.seat]"></span>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+
+                        <!-- Winners -->
+                        <template x-for="w in (replayerState?.winners || [])" :key="'rw'+w.seat">
+                            <div style="text-align:center;padding:4px;margin-top:4px;color:var(--green-accent);font-size:0.75rem;font-weight:600">
+                                <span x-text="w.name"></span> wins $<span x-text="w.amount"></span>
+                                <span x-show="w.hand_name" style="color:var(--text-muted)"> — <span x-text="w.hand_name"></span></span>
+                            </div>
+                        </template>
+
+                        <!-- Current action label -->
+                        <div x-show="replayerState?.currentAction && !replayerState?.isShowdown"
+                             class="replay-action-label" style="text-align:center;margin:8px 0;font-size:0.75rem">
+                            <span :style="'color:'+(replayerState?.players?.find(p=>p.seat===replayerState?.currentAction?.seat)?.color || 'var(--text-primary)')"
+                                  x-text="replayerState?.currentAction?.player_name"></span>
+                            <span x-text="replayerState?.currentAction?.action"></span>
+                            <span x-show="replayerState?.currentAction?.amount > 0" x-text="'$'+replayerState?.currentAction?.amount"></span>
+                        </div>
+
+                        <!-- Playback controls -->
+                        <div class="replay-controls">
+                            <button class="btn btn-sm" @click="replayGoTo(0)" title="Go to start">⏮</button>
+                            <button class="btn btn-sm" @click="replayStep(-1)" title="Step back">◀</button>
+                            <button class="btn btn-sm replay-play-btn" @click="replayPlayPause()" :title="replayer?.playing ? 'Pause' : 'Play'" x-text="replayer?.playing ? '⏸' : '▶'"></button>
+                            <button class="btn btn-sm" @click="replayStep(1)" title="Step forward">▶</button>
+                            <button class="btn btn-sm" @click="replayGoTo(replayer?.hand?.actions?.length || 0)" title="Go to end">⏭</button>
+                        </div>
+
+                        <!-- Progress bar -->
+                        <div class="replay-progress" style="margin-top:6px">
+                            <input type="range" min="0" :max="replayer?.hand?.actions?.length || 0"
+                                   :value="replayer?.stepIndex || 0"
+                                   @input="replayGoTo(parseInt($event.target.value))"
+                                   style="width:100%">
+                            <div style="display:flex;justify-content:space-between;font-size:0.65rem;color:var(--text-muted)">
+                                <span>Step <span x-text="replayer?.stepIndex || 0"></span> / <span x-text="replayer?.hand?.actions?.length || 0"></span></span>
+                                <div class="replay-speed-btns">
+                                    <button class="btn btn-xs" :class="{'active': replayer?.speed===0.5}" @click="replaySetSpeed(0.5)">½×</button>
+                                    <button class="btn btn-xs" :class="{'active': replayer?.speed===1}" @click="replaySetSpeed(1)">1×</button>
+                                    <button class="btn btn-xs" :class="{'active': replayer?.speed===2}" @click="replaySetSpeed(2)">2×</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Stats Dashboard -->
                 <div class="sidebar-panel" :class="{active:sidebarTab==='stats'}">
                     <div class="stats-dashboard" x-show="state.players?.length">
@@ -768,8 +876,8 @@
 
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.3/dist/cdn.min.js" defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
-    <script src="/static/js/sounds.js?v=9"></script>
-    <script src="/static/js/poker-logic.js?v=9"></script>
-    <script src="/static/js/app.js?v=9"></script>
+    <script src="/static/js/sounds.js?v=10"></script>
+    <script src="/static/js/poker-logic.js?v=10"></script>
+    <script src="/static/js/app.js?v=10"></script>
 </body>
 </html>

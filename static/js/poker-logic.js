@@ -312,6 +312,113 @@ const PokerLogic = {
     historyList(handHistories) {
         return (handHistories || []).slice().reverse();
     },
+
+    // ── Hand Replayer ──
+
+    /**
+     * Build the visual state at a given step index for hand replay.
+     * Step 0 = initial state (blinds not yet posted).
+     * Each subsequent step applies one action from hand.actions.
+     *
+     * @param {Object} hand - HandHistory dict with players, actions, community_cards, hole_cards, winners
+     * @param {number} stepIndex - 0..hand.actions.length (inclusive, last = final state)
+     * @returns {Object} { players, communityCards, pot, street, currentAction, isShowdown }
+     */
+    buildReplayState(hand, stepIndex) {
+        if (!hand || !hand.players) return null;
+
+        // Clone player starting state
+        const players = hand.players.map(p => ({
+            seat: p.seat,
+            name: p.name,
+            stack: p.stack,
+            current_bet: 0,
+            is_folded: false,
+            is_all_in: false,
+            hole_cards: [],    // Hidden until showdown
+            color: p.color || null,
+        }));
+
+        const bySeat = {};
+        players.forEach(p => { bySeat[p.seat] = p; });
+
+        let pot = 0;
+        let street = 'preflop';
+        let currentAction = null;
+        let prevStreet = 'preflop';
+
+        // Apply actions up to stepIndex
+        const actions = hand.actions || [];
+        const limit = Math.min(stepIndex, actions.length);
+        for (let i = 0; i < limit; i++) {
+            const a = actions[i];
+            const p = bySeat[a.seat];
+
+            // When street changes, sweep bets into pot
+            if (a.street !== prevStreet) {
+                players.forEach(pl => { pl.current_bet = 0; });
+                prevStreet = a.street;
+            }
+            street = a.street;
+
+            if (!p) continue;
+
+            if (a.action === 'fold') {
+                p.is_folded = true;
+            } else if (a.action === 'check') {
+                // No chip movement
+            } else {
+                // call, bet, raise, small_blind, big_blind
+                const amt = a.amount || 0;
+                p.stack -= (amt - p.current_bet);
+                p.current_bet = amt;
+                if (p.stack <= 0) {
+                    p.stack = 0;
+                    p.is_all_in = true;
+                }
+            }
+
+            if (a.is_all_in) p.is_all_in = true;
+            pot = a.pot_after || pot;
+            currentAction = a;
+        }
+
+        // Determine community cards visible at this street
+        const allComm = hand.community_cards || [];
+        let communityCards = [];
+        if (street === 'flop' || street === 'turn' || street === 'river' || street === 'showdown') {
+            communityCards = allComm.slice(0, 3);  // Flop
+        }
+        if (street === 'turn' || street === 'river' || street === 'showdown') {
+            communityCards = allComm.slice(0, 4);  // + Turn
+        }
+        if (street === 'river' || street === 'showdown') {
+            communityCards = allComm.slice(0, 5);  // + River
+        }
+
+        // At final step or showdown, reveal hole cards and show winners
+        const isShowdown = stepIndex >= actions.length;
+        if (isShowdown && hand.hole_cards) {
+            for (const [seat, cards] of Object.entries(hand.hole_cards)) {
+                const p = bySeat[parseInt(seat)];
+                if (p) p.hole_cards = cards;
+            }
+            communityCards = allComm.slice(0, 5);
+        }
+
+        return {
+            players,
+            communityCards,
+            pot,
+            street,
+            currentAction,
+            isShowdown,
+            winners: isShowdown ? (hand.winners || []) : [],
+            handRanks: isShowdown ? (hand.hand_ranks || {}) : {},
+            stepIndex: limit,
+            totalSteps: actions.length,
+        };
+    },
 };
 
 // Export for both browser and Node.js/Jest

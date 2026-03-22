@@ -74,6 +74,7 @@ class HandHistory:
     def to_dict(self) -> dict:
         return {
             "hand_number": self.hand_number,
+            "players": self.players,
             "community_cards": self.community_cards,
             "actions": [a.to_dict() for a in self.actions],
             "winners": self.winners,

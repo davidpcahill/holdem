@@ -1086,4 +1086,116 @@
 
     /* Keyboard shortcuts hidden on mobile (touch only) */
     .kbd { display: none; }
+
+    /* Replayer mobile */
+    .replay-card { font-size: 0.65rem; padding: 2px 3px; }
+    .replay-card-sm { font-size: 0.6rem; padding: 1px 2px; }
+}
+
+/* ============================================
+   Hand Replayer
+   ============================================ */
+
+.replay-hand-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 10px;
+    margin-bottom: 4px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: border-color 0.15s;
+}
+.replay-hand-item:hover {
+    border-color: var(--gold);
+}
+
+.replay-street-badge {
+    display: inline-block;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: var(--gold);
+    background: rgba(212, 175, 55, 0.1);
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+}
+
+.replay-card {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 3px 5px;
+    border-radius: 3px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-default);
+    font-family: monospace;
+}
+.replay-card.red { color: var(--card-red, #e74c3c); }
+.replay-card.black { color: var(--text-primary); }
+.replay-card-sm { font-size: 0.65rem; padding: 1px 3px; }
+
+.replay-players {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-bottom: 6px;
+}
+
+.replay-player {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
+    border-left: 3px solid transparent;
+    font-size: 0.75rem;
+    transition: all 0.15s;
+}
+.replay-player.replay-active {
+    border-left-color: var(--gold);
+    background: rgba(212, 175, 55, 0.08);
+}
+.replay-player.replay-folded {
+    opacity: 0.4;
+}
+.replay-player.replay-winner {
+    border-left-color: var(--green-accent);
+    background: rgba(46, 204, 113, 0.08);
+}
+
+.replay-player-name { font-weight: 600; min-width: 60px; }
+.replay-player-stack { color: var(--text-muted); font-size: 0.7rem; }
+.replay-player-cards { display: flex; gap: 2px; align-items: center; }
+
+.replay-controls {
+    display: flex;
+    justify-content: center;
+    gap: 4px;
+    margin-top: 8px;
+}
+.replay-controls .btn { min-width: 32px; font-size: 0.8rem; }
+.replay-play-btn { min-width: 40px !important; }
+
+.replay-speed-btns {
+    display: flex;
+    gap: 2px;
+}
+.btn-xs {
+    padding: 1px 5px;
+    font-size: 0.6rem;
+    border-radius: 3px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-default);
+    color: var(--text-muted);
+    cursor: pointer;
+}
+.btn-xs.active {
+    color: var(--gold);
+    border-color: var(--gold);
 }

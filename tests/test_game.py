@@ -886,6 +886,64 @@ def test_all_in_blind_included_in_showdown():
 
 
 # ========================================================================
+# Hand History Serialization
+# ========================================================================
+
+def test_hand_history_includes_players():
+    """HandHistory.to_dict() includes player snapshots for replayer."""
+    g = make_game(2, stack=500, sb=5, bb=10)
+    g.new_hand()
+    # Play hand to completion (check/call through)
+    safety = 0
+    while g.phase == GamePhase.PLAYING and safety < 20:
+        safety += 1
+        seat = g.action_seat
+        if seat < 0:
+            break
+        va = g.get_valid_actions(seat)
+        actions = va.get("actions", [])
+        if any(a["action"] == "check" for a in actions):
+            g.process_action(seat, "check")
+        elif any(a["action"] == "call" for a in actions):
+            g.process_action(seat, "call")
+        else:
+            g.process_action(seat, "fold")
+
+    assert len(g.hand_histories) >= 1
+    h = g.hand_histories[-1].to_dict()
+    assert "players" in h, "HandHistory.to_dict() must include players"
+    assert len(h["players"]) == 2
+    assert h["players"][0]["name"] in ("Player1", "Player2")
+    assert "stack" in h["players"][0]
+    assert "seat" in h["players"][0]
+
+
+def test_hand_history_actions_have_pot_after():
+    """Each action in hand history includes pot_after for replay state."""
+    g = make_game(2, stack=500, sb=5, bb=10)
+    g.new_hand()
+    safety = 0
+    while g.phase == GamePhase.PLAYING and safety < 20:
+        safety += 1
+        seat = g.action_seat
+        if seat < 0:
+            break
+        va = g.get_valid_actions(seat)
+        actions = va.get("actions", [])
+        if any(a["action"] == "check" for a in actions):
+            g.process_action(seat, "check")
+        elif any(a["action"] == "call" for a in actions):
+            g.process_action(seat, "call")
+        else:
+            g.process_action(seat, "fold")
+
+    h = g.hand_histories[-1].to_dict()
+    for action in h["actions"]:
+        assert "pot_after" in action, f"Action missing pot_after: {action}"
+        assert "street" in action
+
+
+# ========================================================================
 # Runner
 # ========================================================================
 

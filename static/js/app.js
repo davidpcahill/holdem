@@ -58,6 +58,10 @@ document.addEventListener('alpine:init', () => {
         autoAdvanceTimer: null,
         gameOverDismissed: false,
 
+        // Hand Replayer
+        replayer: null,         // { hand, stepIndex, playing, speed, intervalId }
+        replayerState: null,    // Computed replay state from buildReplayState()
+
         // Settings (local copy, synced to server)
         localSettings: {
             difficulty: 'medium',
@@ -685,6 +689,89 @@ document.addEventListener('alpine:init', () => {
                 this.startPassPlayCountdown();
             }
             this.lastHumanSeat = currentSeat;
+        },
+
+        // ── Hand Replayer ──
+
+        startReplay(handNumber) {
+            const hand = (this.state.hand_histories || []).find(h => h.hand_number === handNumber);
+            if (!hand || !hand.players) return;
+            this.stopReplay();
+            this.replayer = { hand, stepIndex: 0, playing: false, speed: 1, intervalId: null };
+            this._updateReplayState();
+            this.sidebarTab = 'replay';
+        },
+
+        stopReplay() {
+            if (this.replayer?.intervalId) clearInterval(this.replayer.intervalId);
+            this.replayer = null;
+            this.replayerState = null;
+        },
+
+        replayStep(delta) {
+            if (!this.replayer) return;
+            const max = this.replayer.hand.actions.length;  // Final step = showdown
+            this.replayer.stepIndex = Math.max(0, Math.min(max, this.replayer.stepIndex + delta));
+            this._updateReplayState();
+        },
+
+        replayGoTo(step) {
+            if (!this.replayer) return;
+            this.replayer.stepIndex = step;
+            this._updateReplayState();
+        },
+
+        replayPlayPause() {
+            if (!this.replayer) return;
+            if (this.replayer.playing) {
+                clearInterval(this.replayer.intervalId);
+                this.replayer.intervalId = null;
+                this.replayer.playing = false;
+            } else {
+                // If at end, restart from beginning
+                if (this.replayer.stepIndex >= this.replayer.hand.actions.length) {
+                    this.replayer.stepIndex = 0;
+                }
+                this.replayer.playing = true;
+                const tick = () => {
+                    if (this.replayer.stepIndex >= this.replayer.hand.actions.length) {
+                        clearInterval(this.replayer.intervalId);
+                        this.replayer.intervalId = null;
+                        this.replayer.playing = false;
+                        return;
+                    }
+                    this.replayer.stepIndex++;
+                    this._updateReplayState();
+                };
+                this.replayer.intervalId = setInterval(tick, 1000 / this.replayer.speed);
+            }
+        },
+
+        replaySetSpeed(speed) {
+            if (!this.replayer) return;
+            this.replayer.speed = speed;
+            // If currently playing, restart interval at new speed
+            if (this.replayer.playing && this.replayer.intervalId) {
+                clearInterval(this.replayer.intervalId);
+                const tick = () => {
+                    if (this.replayer.stepIndex >= this.replayer.hand.actions.length) {
+                        clearInterval(this.replayer.intervalId);
+                        this.replayer.intervalId = null;
+                        this.replayer.playing = false;
+                        return;
+                    }
+                    this.replayer.stepIndex++;
+                    this._updateReplayState();
+                };
+                this.replayer.intervalId = setInterval(tick, 1000 / speed);
+            }
+        },
+
+        _updateReplayState() {
+            if (!this.replayer) return;
+            this.replayerState = PokerLogic.buildReplayState(
+                this.replayer.hand, this.replayer.stepIndex
+            );
         },
 
         // ── Hand History Navigation ──
