@@ -132,6 +132,20 @@ def _run_ai_turn():
             positions = my_game._get_positions()
             position = positions.get(player.seat, "")
 
+            # Gather opponent stats for adaptive AI
+            opp_stats = {}
+            if getattr(player, 'adaptive', False):
+                opp_stats = {
+                    p.seat: {
+                        "vpip": p.vpip,
+                        "af": p.aggression_factor,
+                        "wtsd": p.wtsd,
+                        "hands_played": p.hands_played,
+                    }
+                    for p in my_game.players
+                    if p.is_in_hand and p.seat != player.seat
+                }
+
             # Make decision
             decision = ai_engine.decide(
                 player=player,
@@ -142,6 +156,7 @@ def _run_ai_turn():
                 street=my_game.street.value,
                 position=position,
                 num_opponents=num_opponents,
+                opponent_stats=opp_stats,
             )
 
             # Wait for remaining think time
@@ -292,13 +307,14 @@ def api_new_game():
         ]
 
     for p in players:
-        game.add_player(
+        player_obj = game.add_player(
             name=p.get("name", f"Player {len(game.players)+1}"),
             stack=p.get("stack", 1000),
             player_type=p.get("player_type", "human"),
             ai_style=p.get("ai_style", "tight_aggressive"),
             color=p.get("color"),
         )
+        player_obj.adaptive = bool(p.get("adaptive", False))
 
     # Update AI engine settings
     ai_engine = AIEngine(
@@ -566,6 +582,8 @@ def api_update_player():
         p.color = data["color"]
     if "stack" in data:
         p.stack = int(data["stack"])
+    if "adaptive" in data:
+        p.adaptive = bool(data["adaptive"])
 
     return jsonify({"ok": True, "state": _get_full_state()})
 

@@ -120,6 +120,82 @@ def test_ai_postflop_decision():
 
 
 # ========================================================================
+# Adaptive AI Tests
+# ========================================================================
+
+def test_adaptive_ai_returns_valid_action():
+    """Adaptive AI with opponent stats still returns valid action."""
+    player = make_player("tight_aggressive")
+    player.adaptive = True
+    engine = AIEngine(timing_preset="fast", variance=0.1)
+    equity = EquityResult(win=55, tie=5, loss=40)
+
+    opp_stats = {
+        1: {"vpip": 60, "af": 0.3, "hands_played": 20, "wtsd": 30},
+        2: {"vpip": 20, "af": 2.5, "hands_played": 15, "wtsd": 40},
+    }
+
+    valid_actions = {
+        "actions": [
+            {"action": "fold"},
+            {"action": "call", "amount": 20},
+            {"action": "raise", "min": 40, "max": 1000},
+        ],
+        "to_call": 20,
+        "current_bet": 0,
+    }
+
+    decision = engine.decide(
+        player=player, valid_actions=valid_actions, equity=equity,
+        community_cards=[], pot=50, street="flop", position="BTN",
+        num_opponents=2, opponent_stats=opp_stats,
+    )
+    assert decision.action in ("fold", "check", "call", "raise", "bet")
+
+
+def test_adaptive_reduces_bluffs_vs_loose():
+    """Adaptive AI bluffs less against loose opponents (high VPIP)."""
+    from engine.ai import STYLE_PARAMS
+    engine = AIEngine(timing_preset="fast", variance=0.0)
+
+    base_params = dict(STYLE_PARAMS[AIStyle.GTO])
+    opp_stats_loose = {
+        1: {"vpip": 75, "af": 0.5, "hands_played": 50, "wtsd": 40},
+    }
+    adjusted = engine._adjust_for_opponents(dict(base_params), opp_stats_loose)
+    assert adjusted["bluff_frequency"] < base_params["bluff_frequency"], \
+        "Bluff frequency should decrease vs loose opponents"
+
+
+def test_adaptive_increases_bluffs_vs_tight():
+    """Adaptive AI bluffs more against tight opponents (low VPIP)."""
+    from engine.ai import STYLE_PARAMS
+    engine = AIEngine(timing_preset="fast", variance=0.0)
+
+    base_params = dict(STYLE_PARAMS[AIStyle.GTO])
+    opp_stats_tight = {
+        1: {"vpip": 12, "af": 1.5, "hands_played": 50, "wtsd": 20},
+    }
+    adjusted = engine._adjust_for_opponents(dict(base_params), opp_stats_tight)
+    assert adjusted["bluff_frequency"] > base_params["bluff_frequency"], \
+        "Bluff frequency should increase vs tight opponents"
+
+
+def test_adaptive_ignores_small_sample():
+    """Adaptive AI ignores opponents with < 10 hands played."""
+    from engine.ai import STYLE_PARAMS
+    engine = AIEngine(timing_preset="fast", variance=0.0)
+
+    base_params = dict(STYLE_PARAMS[AIStyle.GTO])
+    opp_stats_small = {
+        1: {"vpip": 90, "af": 0.1, "hands_played": 5, "wtsd": 10},
+    }
+    adjusted = engine._adjust_for_opponents(dict(base_params), opp_stats_small)
+    assert adjusted["bluff_frequency"] == base_params["bluff_frequency"], \
+        "Should not adjust with < 10 hands sample"
+
+
+# ========================================================================
 # Runner
 # ========================================================================
 

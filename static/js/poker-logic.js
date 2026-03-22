@@ -240,6 +240,7 @@ const PokerLogic = {
             stack: defaultStack || 1000,
             player_type: 'ai',
             ai_style: 'random',
+            adaptive: false,
         };
     },
 

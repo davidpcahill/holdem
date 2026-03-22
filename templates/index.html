@@ -685,11 +685,11 @@
                         <label style="font-size:0.8rem;font-weight:600;color:var(--text-secondary);text-transform:uppercase">Players (<span x-text="setupData.players.length"></span>/10)</label>
                         <!-- Column headers -->
                         <div style="display:grid;grid-template-columns:24px 1fr 80px 85px 120px 24px;gap:8px;padding:6px 10px;font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.3px">
-                            <span>#</span><span>Name</span><span>Stack</span><span>Type</span><span>AI Style</span><span></span>
+                            <span>#</span><span>Name</span><span>Stack</span><span>Type</span><span>AI Style</span><span title="Adaptive AI: adjusts strategy based on opponent stats">Adapt</span><span></span>
                         </div>
                         <div style="display:flex;flex-direction:column;gap:6px">
                             <template x-for="(p,idx) in setupData.players" :key="'sp'+idx">
-                                <div style="display:grid;grid-template-columns:24px 1fr 80px 85px 120px 24px;gap:8px;align-items:center;padding:6px 10px;background:var(--bg-tertiary);border-radius:var(--radius-md)">
+                                <div style="display:grid;grid-template-columns:24px 1fr 80px 85px 120px 40px 24px;gap:8px;align-items:center;padding:6px 10px;background:var(--bg-tertiary);border-radius:var(--radius-md)">
                                     <span style="font-size:0.75rem;color:var(--text-muted)" x-text="idx+1"></span>
                                     <input type="text" x-model="p.name" placeholder="Name" style="width:100%">
                                     <input type="number" x-model.number="p.stack" min="1" style="width:100%">
@@ -700,6 +700,9 @@
                                         <option value="tight_aggressive">Tight Aggressive</option>
                                         <option value="gto">GTO</option>
                                     </select>
+                                    <label style="display:flex;justify-content:center" :style="p.player_type!=='ai' && 'visibility:hidden'" title="Adaptive: AI reads opponent stats and adjusts strategy">
+                                        <input type="checkbox" x-model="p.adaptive">
+                                    </label>
                                     <span style="color:var(--red-accent);cursor:pointer;font-size:1.1rem;text-align:center;opacity:0.6" @click="removeSetupPlayer(idx)" x-show="setupData.players.length>2" @mouseover="$el.style.opacity=1" @mouseout="$el.style.opacity=0.6">✕</span>
                                 </div>
                             </template>
@@ -757,6 +760,11 @@
                                 <option value="tight_aggressive">Tight Aggressive</option>
                                 <option value="gto">GTO (Balanced)</option>
                             </select>
+                        </div>
+                        <div class="form-group" x-show="editingPlayer.player_type === 'ai'" style="align-self:end">
+                            <label style="display:flex;align-items:center;gap:6px;cursor:pointer" title="Adaptive AI reads opponent VPIP and aggression to adjust strategy. Needs 10+ hands of data.">
+                                <input type="checkbox" x-model="editingPlayer.adaptive"> Adaptive
+                            </label>
                         </div>
                     </div>
                     <div class="form-row">

@@ -82,9 +82,9 @@ document.addEventListener('alpine:init', () => {
             small_blind: 100,
             big_blind: 200,
             players: [
-                { name: 'You', stack: 10000, player_type: 'human', ai_style: 'random' },
-                { name: 'Alice', stack: 10000, player_type: 'ai', ai_style: 'random' },
-                { name: 'Bob', stack: 10000, player_type: 'ai', ai_style: 'random' },
+                { name: 'You', stack: 10000, player_type: 'human', ai_style: 'random', adaptive: false },
+                { name: 'Alice', stack: 10000, player_type: 'ai', ai_style: 'random', adaptive: false },
+                { name: 'Bob', stack: 10000, player_type: 'ai', ai_style: 'random', adaptive: false },
             ],
         },
         defaultStack: 10000,
@@ -791,6 +791,7 @@ document.addEventListener('alpine:init', () => {
                 name: p.name,
                 player_type: p.player_type,
                 ai_style: p.ai_style,
+                adaptive: p.adaptive || false,
                 stack: p.stack,
                 color: p.color,
             };

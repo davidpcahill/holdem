@@ -149,9 +149,13 @@ class AIEngine:
         """
         # RANDOM style: pick a random base style each decision
         if player.ai_style == AIStyle.RANDOM:
-            params = self._rng.choice(list(STYLE_PARAMS.values()))
+            params = dict(self._rng.choice(list(STYLE_PARAMS.values())))
         else:
-            params = STYLE_PARAMS[player.ai_style]
+            params = dict(STYLE_PARAMS[player.ai_style])
+
+        # Adaptive AI: adjust params based on opponent tendencies
+        if getattr(player, 'adaptive', False) and opponent_stats:
+            params = self._adjust_for_opponents(params, opponent_stats)
         actions = valid_actions.get("actions", [])
         to_call = valid_actions.get("to_call", 0)
         current_bet = valid_actions.get("current_bet", 0)
@@ -340,6 +344,59 @@ class AIEngine:
 
         rounded = round(amount / step) * step
         return max(min_bet, min(rounded, max_bet))
+
+    def _adjust_for_opponents(self, params: dict, opponent_stats: Dict) -> dict:
+        """
+        Adjust AI parameters based on observed opponent tendencies.
+        Only adjusts when we have enough data (10+ hands per opponent).
+
+        Exploits:
+        - Loose opponents (high VPIP): reduce bluffs, tighten value ranges
+        - Tight opponents (low VPIP): increase steals and bluffs
+        - Passive opponents (low AF): bet thinner for value
+        - Aggressive opponents (high AF): tighten calling ranges
+        """
+        if not opponent_stats:
+            return params
+
+        # Filter to opponents with enough sample size
+        qualified = [s for s in opponent_stats.values()
+                     if s.get("hands_played", 0) >= 10]
+        if not qualified:
+            return params
+
+        avg_vpip = sum(s.get("vpip", 50) for s in qualified) / len(qualified)
+        avg_af = sum(s.get("af", 1.0) for s in qualified) / len(qualified)
+
+        # --- Exploit loose opponents (avg VPIP > 50) ---
+        # They call too much → reduce bluffs, bet more for value
+        if avg_vpip > 50:
+            looseness = min((avg_vpip - 50) / 30, 1.0)  # 0-1 scale
+            params["bluff_frequency"] *= max(0.3, 1.0 - looseness * 0.6)
+            params["postflop_call_threshold"] *= max(0.7, 1.0 - looseness * 0.2)
+
+        # --- Exploit tight opponents (avg VPIP < 25) ---
+        # They fold too much → steal more, bluff more
+        elif avg_vpip < 25:
+            tightness = min((25 - avg_vpip) / 15, 1.0)
+            params["bluff_frequency"] = min(0.45, params["bluff_frequency"] * (1.0 + tightness * 0.5))
+            params["cbet_frequency"] = min(0.85, params["cbet_frequency"] * (1.0 + tightness * 0.3))
+            params["preflop_raise_threshold"] = max(40, params["preflop_raise_threshold"] - tightness * 10)
+
+        # --- Exploit passive opponents (avg AF < 0.5) ---
+        # They rarely raise → bet thinner for value
+        if avg_af < 0.5:
+            passiveness = min((0.5 - avg_af) / 0.4, 1.0)
+            params["raise_frequency"] = min(0.7, params["raise_frequency"] * (1.0 + passiveness * 0.3))
+
+        # --- Respect aggressive opponents (avg AF > 2.0) ---
+        # They raise a lot → tighten up, don't float
+        elif avg_af > 2.0:
+            aggression = min((avg_af - 2.0) / 2.0, 1.0)
+            params["postflop_call_threshold"] *= (1.0 + aggression * 0.25)
+            params["preflop_call_threshold"] += aggression * 8
+
+        return params
 
     def calculate_think_time(self, player: Player) -> float:
         """

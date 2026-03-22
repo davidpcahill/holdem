@@ -61,6 +61,7 @@ class Player:
         self.stack = stack
         self.player_type = player_type
         self.ai_style = ai_style
+        self.adaptive = False  # Opponent modeling: adjust strategy based on stats
         self.color = color or DEFAULT_COLORS[seat % len(DEFAULT_COLORS)]
 
         # Per-hand state (reset between hands)
@@ -193,6 +194,7 @@ class Player:
             "color": self.color,
             "player_type": self.player_type.value,
             "ai_style": self.ai_style.value,
+            "adaptive": self.adaptive,
             "is_folded": self.is_folded,
             "is_all_in": self.is_all_in,
             "is_active": self.is_active,
