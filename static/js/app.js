@@ -226,6 +226,8 @@ document.addEventListener('alpine:init', () => {
                 this.socket.on('ai_action', (data) => {
                     // Ignore stale events from a previous game
                     if (data.state?._seq && data.state._seq < this._lastSeq) return;
+                    // Tutorial bot actions come via HTTP response, not socket
+                    if (this.tutorial.active) return;
                     this.aiThinkingSeat = -1;
                     // Sound for AI action
                     const act = data.decision?.action;
@@ -252,6 +254,7 @@ document.addEventListener('alpine:init', () => {
                 this.socket.on('street_reveal', (data) => {
                     // Ignore stale events from a previous game
                     if (data.state?._seq && data.state._seq < this._lastSeq) return;
+                    if (this.tutorial.active) return;
                     window.pokerSounds?.streetReveal();
                     if (data.state) {
                         this.updateState(data.state);
@@ -431,6 +434,11 @@ document.addEventListener('alpine:init', () => {
 
         async doAction(action, amount = 0) {
             if (!this.canAct) return;
+            // Tutorial: only allow the guided action
+            if (this.tutorial.active && this.tutorial.guided) {
+                const ga = this.tutorial.guided.action;
+                if (action !== ga && !(action === 'bet' && ga === 'raise') && !(action === 'raise' && ga === 'bet')) return;
+            }
             const seat = this.state.action_seat;
             try {
                 const res = await fetch('/api/action', {
@@ -483,6 +491,7 @@ document.addEventListener('alpine:init', () => {
 
         executeRecommendation(rec) {
             if (!this.canAct) return;
+            if (this.tutorial.active) return; // Tutorial: ignore advisor recommendations
             const action = rec.action;
             if (action === 'fold') {
                 this.doAction('fold');

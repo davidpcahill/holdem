@@ -1297,6 +1297,12 @@
     background: rgba(20, 25, 20, 0.95);
     border-bottom: 1px solid rgba(212, 168, 67, 0.3);
     padding: 6px 16px;
+    height: 32px;
+    box-sizing: border-box;
+}
+#app.tutorial-active {
+    padding-top: 32px;
+    height: calc(100vh - 0px);
 }
 .tutorial-progress-inner {
     display: flex;
@@ -1328,6 +1334,7 @@
 /* Tutorial Modals */
 .tutorial-modal {
     text-align: left;
+    padding: 28px 32px;
 }
 .tutorial-modal-header {
     display: flex;

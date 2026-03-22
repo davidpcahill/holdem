@@ -13,7 +13,7 @@
     <style>[x-cloak] { display: none !important; }</style>
 </head>
 <body>
-    <div id="app" x-data="pokerApp" x-cloak tabindex="0" @keydown.window="handleKey($event)" :data-card-theme="cardTheme">
+    <div id="app" x-data="pokerApp" x-cloak tabindex="0" @keydown.window="handleKey($event)" :data-card-theme="cardTheme" :class="{'tutorial-active': tutorial.active}">
         <!-- Chip animation overlay -->
         <div class="chip-animation-layer"></div>
 
@@ -693,9 +693,9 @@
         <!-- ACTION BAR -->
         <div class="action-bar" :class="{inactive:!canAct}">
             <div class="action-buttons">
-                <button class="action-btn fold-btn" :class="{'guided-action': tutorial.active && tutorial.guided?.action === 'fold'}" @click="doAction('fold')" :disabled="!canAct">Fold <span class="kbd">F</span></button>
-                <button class="action-btn check-call-btn" :class="{'guided-action': tutorial.active && (tutorial.guided?.action === 'call' || tutorial.guided?.action === 'check')}" @click="doCheckCall()" :disabled="!canAct"><span x-text="checkCallLabel"></span> <span class="kbd">C</span></button>
-                <button class="action-btn raise-btn" :class="{'guided-action': tutorial.active && (tutorial.guided?.action === 'raise' || tutorial.guided?.action === 'bet')}" @click="doRaise()" :disabled="!canRaise"><span x-text="raiseLabel"></span> <span class="kbd">R</span></button>
+                <button class="action-btn fold-btn" :class="{'guided-action': tutorial.active && tutorial.guided?.action === 'fold'}" @click="doAction('fold')" :disabled="!canAct || (tutorial.active && tutorial.guided && tutorial.guided.action !== 'fold')">Fold <span class="kbd">F</span></button>
+                <button class="action-btn check-call-btn" :class="{'guided-action': tutorial.active && (tutorial.guided?.action === 'call' || tutorial.guided?.action === 'check')}" @click="doCheckCall()" :disabled="!canAct || (tutorial.active && tutorial.guided && tutorial.guided.action !== 'call' && tutorial.guided.action !== 'check')"><span x-text="checkCallLabel"></span> <span class="kbd">C</span></button>
+                <button class="action-btn raise-btn" :class="{'guided-action': tutorial.active && (tutorial.guided?.action === 'raise' || tutorial.guided?.action === 'bet')}" @click="doRaise()" :disabled="!canRaise || (tutorial.active && tutorial.guided && tutorial.guided.action !== 'raise' && tutorial.guided.action !== 'bet')"><span x-text="raiseLabel"></span> <span class="kbd">R</span></button>
             </div>
             <div class="bet-controls" x-show="canRaise">
                 <div class="bet-slider-row">

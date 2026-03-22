@@ -715,30 +715,8 @@ def _run_tutorial_bot() -> Optional[dict]:
 
     result = game.process_action(player.seat, action, amount)
 
-    # Emit via socket so frontend updates
-    action_state = _get_full_state()
-    socketio.emit("ai_action", {
-        "seat": player.seat,
-        "name": player.name,
-        "decision": {"action": action, "amount": amount},
-        "result": result,
-        "state": action_state,
-        "street_changed": False,
-    })
-
-    # Check for showdown
-    if result.get("showdown") or result.get("winners"):
-        return result
-
-    # If street changed, emit reveal
-    if game.street.value != action_state.get("street", "preflop"):
-        time.sleep(0.3)
-        reveal_state = _get_full_state()
-        socketio.emit("street_reveal", {
-            "street": game.street.value,
-            "community_cards": reveal_state["community_cards"],
-            "state": reveal_state,
-        })
+    # No socket emits — the HTTP response from api_action carries all state.
+    # Emitting here would race with the HTTP response and cause stale-state bugs.
 
     return result
 
