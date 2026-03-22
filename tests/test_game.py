@@ -825,6 +825,40 @@ def test_all_in_bb_gets_dealt_cards():
     assert bb_player.is_in_hand, "All-in BB player should still be in hand"
 
 
+def test_partial_blind_sb_gets_dealt_cards():
+    """Player with less than SB who goes all-in posting partial blind gets cards."""
+    g = GameState()
+    g.set_blinds(100, 200)
+    g.add_player("Normal", stack=5000, player_type="human")      # Seat 0 (BTN)
+    g.add_player("TinySB", stack=50, player_type="human")        # Seat 1 (SB) — less than SB
+    g.add_player("Bob", stack=5000, player_type="human")         # Seat 2 (BB)
+    g.new_hand()
+
+    tiny = g.players[1]
+    assert tiny.is_all_in, "Player should be all-in after posting partial SB"
+    assert tiny.stack == 0
+    assert tiny.current_bet == 50, "Should have posted partial blind"
+    assert len(tiny.hole_cards) == 2, \
+        f"Partial blind all-in player should have 2 cards, got {len(tiny.hole_cards)}"
+
+
+def test_partial_blind_bb_gets_dealt_cards():
+    """Player with less than BB who goes all-in posting partial blind gets cards."""
+    g = GameState()
+    g.set_blinds(100, 200)
+    g.add_player("Normal", stack=5000, player_type="human")      # Seat 0 (BTN)
+    g.add_player("Alice", stack=5000, player_type="human")       # Seat 1 (SB)
+    g.add_player("TinyBB", stack=150, player_type="human")       # Seat 2 (BB) — less than BB
+    g.new_hand()
+
+    tiny = g.players[2]
+    assert tiny.is_all_in, "Player should be all-in after posting partial BB"
+    assert tiny.stack == 0
+    assert tiny.current_bet == 150, "Should have posted partial blind"
+    assert len(tiny.hole_cards) == 2, \
+        f"Partial blind all-in player should have 2 cards, got {len(tiny.hole_cards)}"
+
+
 def test_all_in_blind_included_in_showdown():
     """Player all-in from blind should be eligible for pot at showdown."""
     g = GameState()
