@@ -80,8 +80,7 @@ document.addEventListener('alpine:init', () => {
         // ── Computed Properties ──
 
         get streetDisplay() {
-            const m = { preflop:'Pre-Flop', flop:'Flop', turn:'Turn', river:'River', showdown:'Showdown', hand_over:'Hand Over' };
-            return m[this.state.street] || this.state.street;
+            return PokerLogic.streetDisplay(this.state.street);
         },
 
         get humanSeat() {
@@ -90,68 +89,43 @@ document.addEventListener('alpine:init', () => {
         },
 
         get canAct() {
-            return this.state.phase === 'playing'
-                && this.state.action_seat >= 0
-                && this.state.players?.[this.state.action_seat]?.player_type === 'human';
+            return PokerLogic.canAct(this.state);
         },
 
         get toCallAmount() {
-            const raw = this.state.valid_actions?.to_call || 0;
-            const stack = this.state.valid_actions?.player_stack ?? Infinity;
-            return Math.min(raw, stack);
+            return PokerLogic.toCallAmount(this.state.valid_actions);
         },
 
         get isCallAllIn() {
-            const actions = this.state.valid_actions?.actions || [];
-            const callAction = actions.find(a => a.action === 'call');
-            return callAction?.is_all_in || false;
+            return PokerLogic.isCallAllIn(this.state.valid_actions);
         },
 
         get checkCallLabel() {
-            if (this.toCallAmount <= 0) return 'Check';
-            if (this.isCallAllIn) return `All-In $${this.toCallAmount}`;
-            return `Call $${this.toCallAmount}`;
+            return PokerLogic.checkCallLabel(this.state.valid_actions);
         },
 
         get canRaise() {
-            if (!this.canAct || !this.state.valid_actions) return false;
-            return (this.state.valid_actions.actions || []).some(a => a.action === 'bet' || a.action === 'raise');
+            return PokerLogic.canRaise(this.state);
         },
 
         get raiseLabel() {
-            if (!this.state.valid_actions) return 'Raise';
-            const ra = (this.state.valid_actions.actions || []).find(a => a.action === 'bet' || a.action === 'raise');
-            if (this.betAmount >= this.raiseMax) return `All-In $${this.raiseMax}`;
-            return ra?.action === 'bet' ? `Bet $${this.betAmount}` : `Raise to $${this.betAmount}`;
+            return PokerLogic.raiseLabel(this.state.valid_actions, this.betAmount, this.raiseMax);
         },
 
         get raiseMin() {
-            const ra = (this.state.valid_actions?.actions || []).find(a => a.action === 'bet' || a.action === 'raise');
-            return ra?.min || this.state.big_blind;
+            return PokerLogic.raiseMin(this.state.valid_actions, this.state.big_blind);
         },
 
         get raiseMax() {
-            const ra = (this.state.valid_actions?.actions || []).find(a => a.action === 'bet' || a.action === 'raise');
-            return ra?.max || (this.state.players?.[this.state.action_seat]?.stack || 100);
+            return PokerLogic.raiseMax(this.state.valid_actions, this.state);
         },
 
         get sliderStep() {
-            const range = this.raiseMax - this.raiseMin;
-            if (range < 100) return 1;
-            if (range < 500) return 5;
-            if (range < 2000) return 10;
-            if (range < 5000) return 25;
-            if (range < 20000) return 50;
-            if (range < 100000) return 100;
-            return 250;
+            return PokerLogic.sliderStep(this.raiseMin, this.raiseMax);
         },
 
         snapBet(val) {
-            // Snap dragged value to clean increment, but keep min/max exact
-            if (val <= this.raiseMin) return this.raiseMin;
-            if (val >= this.raiseMax) return this.raiseMax;
-            const step = this.sliderStep;
-            return Math.round(val / step) * step;
+            return PokerLogic.snapBet(val, this.raiseMin, this.raiseMax, this.sliderStep);
         },
 
         // ── Initialization ──
@@ -184,8 +158,6 @@ document.addEventListener('alpine:init', () => {
                     // Ignore stale events from a previous game
                     if (data.state?._seq && data.state._seq < this._lastSeq) return;
                     this.aiThinkingSeat = -1;
-                    // Mark advisor as loading — advisor_update event will follow
-                    this.advisorLoading = true;
                     // Sound for AI action
                     const act = data.decision?.action;
                     if (act === 'fold') window.pokerSounds?.fold();
@@ -279,8 +251,9 @@ document.addEventListener('alpine:init', () => {
                     this.advisorLoading = false;
                 } else if (turnChanged || streetChanged || playersChanged || newHand) {
                     // Situation changed — clear stale advisor and request fresh data
+                    // Always fetch regardless of advisorLoading (prior loading is stale)
                     this.advisor = null;
-                    if (this.advisorEnabled && !this.advisorLoading) {
+                    if (this.advisorEnabled) {
                         this.fetchAdvisor();
                     }
                 } else if (!this.advisor && !this.advisorLoading && this.advisorEnabled) {
@@ -462,21 +435,11 @@ document.addEventListener('alpine:init', () => {
         },
 
         sliderRecommendStyle() {
-            if (!this.advisor?.top_action?.bet_range) return 'display:none';
-            const [lo, hi] = this.advisor.top_action.bet_range;
-            const min = this.raiseMin;
-            const max = this.raiseMax;
-            const range = max - min;
-            if (range <= 0) return 'display:none';
-            const left = Math.max(0, ((lo - min) / range) * 100);
-            const right = Math.min(100, ((hi - min) / range) * 100);
-            const width = Math.max(2, right - left);
-            return `left:${left}%;width:${width}%`;
+            return PokerLogic.sliderRecommendStyle(this.advisor, this.raiseMin, this.raiseMax);
         },
 
         setBetPreset(mult) {
-            const target = Math.round((this.state.pot || 0) * mult);
-            this.betAmount = this.snapBet(Math.max(this.raiseMin, Math.min(target, this.raiseMax)));
+            this.betAmount = PokerLogic.setBetPreset(this.state.pot, mult, this.raiseMin, this.raiseMax, this.sliderStep);
         },
 
         async saveSettings() {
@@ -581,41 +544,31 @@ document.addEventListener('alpine:init', () => {
         // ── Setup Helpers ──
 
         addSetupPlayer() {
-            if (this.setupData.players.length >= 10) return;
-            const n = this.setupData.players.length + 1;
-            this.setupData.players.push({
-                name: `Player ${n}`, stack: this.defaultStack || 1000,
-                player_type: 'ai', ai_style: 'random',
-            });
+            if (!PokerLogic.canAddPlayer(this.setupData.players)) return;
+            this.setupData.players.push(PokerLogic.makeNewPlayer(this.setupData.players.length, this.defaultStack));
         },
 
         removeSetupPlayer(idx) {
-            if (this.setupData.players.length <= 2) return;
+            if (!PokerLogic.canRemovePlayer(this.setupData.players)) return;
             this.setupData.players.splice(idx, 1);
         },
 
         // ── Display Helpers ──
 
         getLastAction(seat) {
-            for (let i = this.actionLog.length - 1; i >= 0; i--) {
-                if (this.actionLog[i].seat === seat) return this.actionLog[i].action;
-            }
-            return '';
+            return PokerLogic.getLastAction(this.actionLog, seat);
         },
 
         getLastActionDisplay(seat) {
-            const a = this.getLastAction(seat);
-            const m = { fold:'FOLD', check:'CHECK', call:'CALL', bet:'BET', raise:'RAISE', small_blind:'SB', big_blind:'BB' };
-            return m[a] || a.toUpperCase();
+            return PokerLogic.getLastActionDisplay(this.actionLog, seat);
         },
 
         formatAction(entry) {
-            const m = { fold:'folds', check:'checks', call:'calls', bet:'bets', raise:'raises to', small_blind:'posts small blind', big_blind:'posts big blind' };
-            return m[entry.action] || entry.action;
+            return PokerLogic.formatAction(entry);
         },
 
         formatAIStyle(s) {
-            return { loose_passive:'Loose-Passive', tight_aggressive:'Tight-Aggressive', gto:'GTO', random:'Random' }[s] || s;
+            return PokerLogic.formatAIStyle(s);
         },
 
         getPlayerColor(seat) {
@@ -623,80 +576,29 @@ document.addEventListener('alpine:init', () => {
         },
 
         positionTooltip(pos) {
-            const t = {
-                'BTN': 'Button — Acts last post-flop. Best position at the table.',
-                'BTN/SB': 'Button / Small Blind — In heads-up play, the dealer posts the small blind.',
-                'SB': 'Small Blind — Posts half the minimum bet. First to act post-flop.',
-                'BB': 'Big Blind — Posts the full minimum bet. Last to act pre-flop (gets an option).',
-                'UTG': 'Under The Gun — First to act pre-flop. The tightest position.',
-                'UTG+1': 'Under The Gun +1 — Second earliest position.',
-                'MP': 'Middle Position — Moderate positional advantage.',
-                'MP+1': 'Middle Position +1',
-                'MP+2': 'Middle Position +2',
-                'HJ': 'Hijack — Two seats before the button. Good for stealing blinds.',
-                'CO': 'Cutoff — One seat before the button. Very strong late position.',
-            };
-            return t[pos] || pos;
+            return PokerLogic.positionTooltip(pos);
         },
 
         betTypeTooltip(type) {
-            const t = {
-                'value': 'Value Bet — You have a strong hand and are betting to extract chips from opponents who will call with worse hands.',
-                'semi_bluff': 'Semi-Bluff — You have a drawing hand. You win if opponents fold, or if you hit your draw.',
-                'bluff': 'Bluff — You have a weak hand but are betting to make opponents fold better hands.',
-                'cbet': 'Continuation Bet — Following up on pre-flop aggression with a bet on the flop.',
-            };
-            return t[type] || type;
+            return PokerLogic.betTypeTooltip(type);
         },
 
         aiStyleTooltip(style) {
-            const t = {
-                loose_passive: 'Loose-Passive: Plays many hands, mostly calls, rarely raises. Easy to push around.',
-                tight_aggressive: 'Tight-Aggressive: Plays fewer hands but bets and raises aggressively. Strong style.',
-                gto: 'GTO (Game Theory Optimal): Balanced strategy mixing bets, calls, and folds at theoretically optimal frequencies.',
-            };
-            return t[style] || style;
+            return PokerLogic.aiStyleTooltip(style);
         },
 
         isWinner(seat) {
-            return this.showdown?.winners?.some(w => w.seat === seat) || false;
+            return PokerLogic.isWinner(this.showdown, seat);
         },
 
         isWinnerCard(seat, card) {
-            if (!this.showdown?.hand_results?.[seat]?.cards) return false;
-            return this.showdown.hand_results[seat].cards.some(c => c.short === card.short);
+            return PokerLogic.isWinnerCard(this.showdown, seat, card);
         },
 
         // ── Pass & Play ──
 
         shouldShowCards(player) {
-            // Always show at showdown / hand over
-            if (this.state.street === 'showdown' || this.state.street === 'hand_over') {
-                return !player.is_folded && !!player.hole_cards;
-            }
-            // If hide hands is off, show all revealed cards
-            if (!this.hideHands) return !!player.hole_cards;
-            // If pass-play countdown is active, hide everything
-            if (this.passPlayActive) return false;
-
-            const humans = (this.state.players || []).filter(
-                p => p.player_type === 'human' && !p.is_folded && !p.is_sitting_out && p.stack > 0
-            );
-
-            // If no humans in hand, show everything (all-AI)
-            if (humans.length === 0) return !!player.hole_cards;
-
-            // Single human: always show that human's cards, always hide AI cards
-            if (humans.length === 1) {
-                if (player.player_type === 'human') return !!player.hole_cards;
-                return false; // Hide AI cards
-            }
-
-            // Multiple humans (pass-and-play): only show the current actor's cards
-            if (this.state.action_seat >= 0 && player.seat === this.state.action_seat && player.player_type === 'human') {
-                return !!player.hole_cards;
-            }
-            return false;
+            return PokerLogic.shouldShowCards(player, this.state, this.hideHands, this.passPlayActive);
         },
 
         startPassPlayCountdown() {
@@ -732,7 +634,7 @@ document.addEventListener('alpine:init', () => {
         // ── Hand History Navigation ──
 
         get historyList() {
-            return (this.state.hand_histories || []).slice().reverse();
+            return PokerLogic.historyList(this.state.hand_histories);
         },
 
         // ── Player Editing ──

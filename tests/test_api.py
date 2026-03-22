@@ -541,6 +541,7 @@ def test_script_tags_have_cache_buster():
         html = c.get('/').data.decode()
         assert 'app.js?v=' in html, "app.js should have cache-busting ?v= parameter"
         assert 'sounds.js?v=' in html, "sounds.js should have cache-busting ?v= parameter"
+        assert 'poker-logic.js?v=' in html, "poker-logic.js should have cache-busting ?v= parameter"
 
 
 # ════════════════════════════════════════════════
