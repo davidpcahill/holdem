@@ -813,6 +813,102 @@
     margin-left: 4px;
 }
 
+/* ── Stats Dashboard ── */
+.stats-dashboard {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 8px 0;
+}
+.stats-player-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-default);
+    border-radius: 8px;
+    padding: 12px;
+}
+.stats-player-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-left: 8px;
+    margin-bottom: 10px;
+}
+.stats-player-name {
+    font-weight: 600;
+    font-size: 14px;
+}
+.stats-player-type {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+.stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+.stat-item {
+    text-align: center;
+    padding: 6px 4px;
+    background: var(--bg-tertiary);
+    border-radius: 6px;
+}
+.stat-label {
+    display: block;
+    font-size: 10px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+}
+.stat-value {
+    font-size: 14px;
+    font-weight: 600;
+}
+.stat-positive { color: var(--green-accent); }
+.stat-negative { color: var(--red-accent); }
+.stats-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+.stat-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.stat-bar-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    width: 36px;
+    text-align: right;
+}
+.stat-bar-track {
+    flex: 1;
+    height: 8px;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    overflow: hidden;
+}
+.stat-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+.stat-bar-value {
+    font-size: 11px;
+    width: 36px;
+    text-align: left;
+    color: var(--text-secondary);
+}
+.stats-counts {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: center;
+}
+
 /* ── Mobile sidebar toggle ── */
 .sidebar-toggle-btn { display: none; }
 
@@ -857,4 +953,77 @@
     .bet-controls { max-width: 100%; }
     .action-info { display: none; }
     .community-section { padding: 14px 16px; }
+
+    /* Touch-friendly action buttons */
+    .action-btn {
+        min-height: 44px;
+        min-width: 44px;
+        font-size: 14px;
+        padding: 10px 16px;
+    }
+    .bet-preset-btn {
+        min-height: 36px;
+        padding: 6px 12px;
+    }
+
+    /* Stats dashboard compact on mobile */
+    .stats-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+    }
+}
+
+/* ── Small phones (≤600px) ── */
+@media (max-width: 600px) {
+    :root {
+        --card-width: 44px;
+        --card-height: 62px;
+    }
+    .topbar {
+        padding: 0 8px;
+        height: 44px;
+    }
+    .topbar-brand { font-size: 0.75rem; }
+    .topbar-info .info-item:nth-child(n+2) { display: none; }
+
+    .players-section {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 6px;
+        padding: 8px;
+    }
+    .player-seat {
+        padding: 8px;
+    }
+    .seat-name { font-size: 12px; }
+    .seat-stack { font-size: 11px; }
+
+    .community-section {
+        padding: 10px 8px;
+    }
+    .community-cards {
+        gap: 4px;
+    }
+
+    .action-bar {
+        padding: 8px;
+        gap: 6px;
+    }
+    .action-btn {
+        font-size: 13px;
+        padding: 8px 12px;
+    }
+
+    /* Card picker grid smaller */
+    .card-picker-grid {
+        gap: 2px;
+    }
+    .card-picker-card {
+        font-size: 11px;
+        padding: 3px 2px;
+    }
+
+    /* Sidebar wider on small phones */
+    .sidebar {
+        width: 100vw !important;
+    }
 }

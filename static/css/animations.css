@@ -112,3 +112,95 @@
 @keyframes spin {
     to { transform: rotate(360deg); }
 }
+
+/* ── Card Deal Animation ── */
+.player-seat .playing-card {
+    animation: dealCard 0.35s ease-out backwards;
+}
+.player-seat .playing-card:nth-child(1) { animation-delay: 0ms; }
+.player-seat .playing-card:nth-child(2) { animation-delay: 120ms; }
+
+@keyframes dealCard {
+    from {
+        opacity: 0;
+        transform: translateY(-30px) scale(0.6);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* ── Chip Bet Animation ── */
+.seat-action-label {
+    animation: chipSlide 0.25s ease-out;
+}
+@keyframes chipSlide {
+    from {
+        opacity: 0;
+        transform: translateY(-8px) scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* ── Pot Win Sweep ── */
+.winner-glow {
+    animation: winGlow 1.5s ease-in-out;
+}
+@keyframes winGlow {
+    0% { box-shadow: 0 0 0 rgba(212, 168, 67, 0); }
+    30% { box-shadow: 0 0 30px rgba(212, 168, 67, 0.6); }
+    100% { box-shadow: 0 0 0 rgba(212, 168, 67, 0); }
+}
+
+/* Winner chip bounce — attach to winner's stack */
+.winner-chips {
+    animation: chipWin 0.6s ease-out;
+}
+
+/* ── Dealer Button Rotation ── */
+.dealer-badge {
+    animation: dealerPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes dealerPop {
+    from { transform: scale(0); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+
+/* ── Pot Amount Pulse (when pot changes) ── */
+.pot-amount-pulse {
+    animation: potPulse 0.4s ease-out;
+}
+@keyframes potPulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.15); color: var(--gold); }
+    100% { transform: scale(1); }
+}
+
+/* ── Street Label Transition ── */
+.street-badge {
+    animation: streetBadge 0.3s ease-out;
+}
+@keyframes streetBadge {
+    from { opacity: 0; transform: scale(0.8); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+/* ── Fold Fade-Out ── */
+.player-seat.is-folded .playing-card {
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    opacity: 0.3;
+    transform: scale(0.9);
+}
+
+/* ── Connection Status ── */
+.connection-lost {
+    animation: connectionPulse 2s ease-in-out infinite;
+}
+@keyframes connectionPulse {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+}
