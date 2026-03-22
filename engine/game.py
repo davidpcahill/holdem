@@ -280,11 +280,13 @@ class GameState:
         self._log_action(bb_seat, "big_blind", bb_actual)
 
     def _deal_hole_cards(self) -> None:
-        """Deal 2 cards to each active player."""
-        active = self._active_player_seats()
+        """Deal 2 cards to each player in the hand (including all-in from blinds)."""
+        # Use is_in_hand (not is_active) so players who went all-in posting
+        # blinds still get dealt cards.
+        in_hand = [p.seat for p in self.players if p.is_in_hand]
         # Deal one card at a time around the table, starting left of dealer
-        start = self._next_active_seat(self.dealer_seat)
-        order = self._seats_from(start, active)
+        start = self._next_in_hand_seat(self.dealer_seat)
+        order = self._seats_from(start, in_hand)
         for _ in range(2):
             for seat in order:
                 card = self.deck.draw_one()

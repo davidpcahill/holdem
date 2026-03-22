@@ -789,6 +789,68 @@ def test_busted_player_never_gets_action():
             g.process_action(g.action_seat, "fold")
 
 
+def test_all_in_sb_gets_dealt_cards():
+    """Player who goes all-in posting SB should still get hole cards."""
+    g = GameState()
+    g.set_blinds(100, 200)
+    # First hand: seat 0 = BTN, seat 1 = SB, seat 2 = BB
+    g.add_player("Normal", stack=5000, player_type="human")      # Seat 0 (BTN)
+    g.add_player("ShortStack", stack=100, player_type="human")   # Seat 1 (SB) — exactly SB
+    g.add_player("Bob", stack=5000, player_type="human")         # Seat 2 (BB)
+    g.new_hand()
+
+    sb_player = g.players[1]  # Seat 1 is SB
+    assert sb_player.is_all_in, "Short stack should be all-in after posting SB"
+    assert sb_player.stack == 0, "Short stack should have 0 chips after posting SB"
+    assert len(sb_player.hole_cards) == 2, \
+        f"All-in SB player should have 2 hole cards, got {len(sb_player.hole_cards)}"
+    assert sb_player.is_in_hand, "All-in SB player should still be in hand"
+
+
+def test_all_in_bb_gets_dealt_cards():
+    """Player who goes all-in posting BB should still get hole cards."""
+    g = GameState()
+    g.set_blinds(100, 200)
+    # First hand: seat 0 = BTN, seat 1 = SB, seat 2 = BB
+    g.add_player("Normal", stack=5000, player_type="human")      # Seat 0 (BTN)
+    g.add_player("Alice", stack=5000, player_type="human")       # Seat 1 (SB)
+    g.add_player("ShortBB", stack=200, player_type="human")      # Seat 2 (BB) — exactly BB
+    g.new_hand()
+
+    bb_player = g.players[2]  # Seat 2 is BB
+    assert bb_player.is_all_in, "Short stack should be all-in after posting BB"
+    assert bb_player.stack == 0, "Short stack should have 0 chips after posting BB"
+    assert len(bb_player.hole_cards) == 2, \
+        f"All-in BB player should have 2 hole cards, got {len(bb_player.hole_cards)}"
+    assert bb_player.is_in_hand, "All-in BB player should still be in hand"
+
+
+def test_all_in_blind_included_in_showdown():
+    """Player all-in from blind should be eligible for pot at showdown."""
+    g = GameState()
+    g.set_blinds(100, 200)
+    g.add_player("ShortStack", stack=100, player_type="human")  # Goes all-in posting SB
+    g.add_player("Alice", stack=5000, player_type="human")
+    g.add_player("Bob", stack=5000, player_type="human")
+    g.new_hand()
+
+    # All non-all-in players fold — short stack should win
+    safety = 0
+    while g.phase == GamePhase.PLAYING and safety < 20:
+        safety += 1
+        seat = g.action_seat
+        if seat < 0:
+            break
+        p = g.players[seat]
+        if p.is_all_in:
+            continue  # Can't act
+        g.process_action(seat, "fold")
+
+    # Short stack should have won some chips
+    short = next(p for p in g.players if p.name == "ShortStack")
+    assert short.stack > 0, f"All-in blind player should win pot, got stack={short.stack}"
+
+
 # ========================================================================
 # Runner
 # ========================================================================
