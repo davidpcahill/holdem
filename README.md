@@ -153,22 +153,26 @@ holdem/
 ├── templates/
 │   └── index.html             # Single-page app shell
 └── tests/
-    ├── test_engine.py         # 44 tests: cards, deck, all hand ranks, kickers
-    ├── test_game.py           # 38 tests: game lifecycle, side pots, undo, turn order, race conditions
-    ├── test_api.py            # 15 tests: all API endpoints
+    ├── test_engine.py         # 49 tests: cards, deck, all hand ranks, kickers, equity
+    ├── test_game.py           # 38 tests: game lifecycle, side pots, undo, turn order
+    ├── test_api.py            # 24 tests: REST endpoints, race conditions, caching
+    ├── test_ai.py             # 6 tests: AI decision engine, think time, styles
+    ├── test_turn_order.py     # 12 tests: turn order, socket events, race conditions
     └── test_final.py          # Integration: showdown, card reveal, game-over
 ```
 
 ## Tests
 
 ```bash
-python tests/test_engine.py    # 44 tests — card primitives, hand evaluation
+python tests/test_engine.py    # 49 tests — card primitives, hand evaluation, equity
 python tests/test_game.py      # 38 tests — game state machine, side pots, undo, turn order
-python tests/test_api.py       # 15 tests — every REST endpoint
+python tests/test_api.py       # 24 tests — REST endpoints, race conditions, caching
+python tests/test_ai.py        # 6 tests — AI decision engine, styles, think time
+python tests/test_turn_order.py # 12 tests — turn order, socket events
 python tests/test_final.py     # Integration — showdown, game-over, exports
 ```
 
-105 tests covering hand evaluation (all 10 ranks, wheel straights, 7-card best-of-21, tiebreakers), equity calculator (preflop lookup, Monte Carlo convergence), AI decision engine (all 4 styles, think time, edge cases), game lifecycle (blinds, dealing, streets, showdown, side pots), betting validation (min raise, all-in edge cases), undo/redo, advisor (preflop/postflop analysis), manual dealing, card assignment, player editing, history export, settings persistence, and HTML feature completeness.
+129 tests covering hand evaluation (all 10 ranks, wheel straights, 7-card best-of-21, tiebreakers), equity calculator (preflop lookup, Monte Carlo convergence), AI decision engine (all 4 styles, think time, edge cases), game lifecycle (blinds, dealing, streets, showdown, side pots), betting validation (min raise, all-in edge cases), undo/redo, turn order (preflop/postflop, skip folded/all-in), race conditions (stale state, game version, sequence numbers, caching), advisor (preflop/postflop analysis), manual dealing, card assignment, player editing, history export, settings persistence, and HTML feature completeness.
 
 ## API Endpoints
 
