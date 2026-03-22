@@ -149,6 +149,7 @@ holdem/
 │   │   └── animations.css     # Transitions, glows, dealing effects
 │   └── js/
 │       ├── app.js             # Alpine.js app, SocketIO, game interactions
+│       ├── poker-logic.js     # Pure logic module (testable without browser)
 │       └── sounds.js          # Web Audio API synthesized sounds
 ├── templates/
 │   └── index.html             # Single-page app shell
@@ -158,7 +159,9 @@ holdem/
     ├── test_api.py            # 24 tests: REST endpoints, race conditions, caching
     ├── test_ai.py             # 6 tests: AI decision engine, think time, styles
     ├── test_turn_order.py     # 12 tests: turn order, socket events, race conditions
-    └── test_final.py          # Integration: showdown, card reveal, game-over
+    ├── test_final.py          # Integration: showdown, card reveal, game-over
+    └── js/
+        └── poker-logic.test.js # 95 tests: UI logic, state management, advisor refresh
 ```
 
 ## Tests
@@ -170,9 +173,10 @@ python tests/test_api.py       # 24 tests — REST endpoints, race conditions, c
 python tests/test_ai.py        # 6 tests — AI decision engine, styles, think time
 python tests/test_turn_order.py # 12 tests — turn order, socket events
 python tests/test_final.py     # Integration — showdown, game-over, exports
+npm test                       # 95 tests — UI logic, state management, advisor refresh
 ```
 
-129 tests covering hand evaluation (all 10 ranks, wheel straights, 7-card best-of-21, tiebreakers), equity calculator (preflop lookup, Monte Carlo convergence), AI decision engine (all 4 styles, think time, edge cases), game lifecycle (blinds, dealing, streets, showdown, side pots), betting validation (min raise, all-in edge cases), undo/redo, turn order (preflop/postflop, skip folded/all-in), race conditions (stale state, game version, sequence numbers, caching), advisor (preflop/postflop analysis), manual dealing, card assignment, player editing, history export, settings persistence, and HTML feature completeness.
+224 tests (129 Python + 95 JavaScript) covering hand evaluation (all 10 ranks, wheel straights, 7-card best-of-21, tiebreakers), equity calculator (preflop lookup, Monte Carlo convergence), AI decision engine (all 4 styles, think time, edge cases), game lifecycle (blinds, dealing, streets, showdown, side pots), betting validation (min raise, all-in edge cases), undo/redo, turn order (preflop/postflop, skip folded/all-in), race conditions (stale state, game version, sequence numbers, caching), advisor (preflop/postflop analysis), UI logic (computed properties, display helpers, card visibility, pass-and-play, slider snapping, bet presets, advisor refresh triggers), manual dealing, card assignment, player editing, history export, settings persistence, and HTML feature completeness.
 
 ## API Endpoints
 

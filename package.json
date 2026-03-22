@@ -1,0 +1,23 @@
+{
+  "name": "holdem",
+  "version": "1.0.0",
+  "description": "Texas Hold'em Poker Advisor & Simulator",
+  "private": true,
+  "scripts": {
+    "test": "jest",
+    "test:js": "jest --verbose"
+  },
+  "jest": {
+    "testEnvironment": "jsdom",
+    "testMatch": ["**/tests/js/**/*.test.js"]
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/davidpcahill/holdem.git"
+  },
+  "license": "ISC",
+  "devDependencies": {
+    "jest": "^30.3.0",
+    "jest-environment-jsdom": "^30.3.0"
+  }
+}
