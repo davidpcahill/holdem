@@ -63,15 +63,17 @@ def _push_advisor_async(seat: int):
     version_at_call = _game_version
     def _do():
         if _game_version != version_at_call:
-            return  # Game was reset, don't push stale advisor
+            # Always emit so frontend clears advisorLoading
+            socketio.emit("advisor_update", {"error": "game_changed"})
+            return
         try:
             advisor_data = _compute_advisor(seat)
             if _game_version != version_at_call:
-                return  # Game was reset during computation
+                socketio.emit("advisor_update", {"error": "game_changed"})
+                return
             socketio.emit("advisor_update", advisor_data)
         except Exception:
-            if _game_version == version_at_call:
-                socketio.emit("advisor_update", {"error": "failed"})
+            socketio.emit("advisor_update", {"error": "failed"})
     threading.Thread(target=_do, daemon=True).start()
 
 
