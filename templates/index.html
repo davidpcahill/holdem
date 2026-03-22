@@ -704,8 +704,9 @@
                         <div x-show="advisorEnabled && advisor?.top_action?.bet_range" class="slider-recommend"
                              :style="sliderRecommendStyle()"
                              :title="'Recommended: $' + (advisor?.top_action?.bet_range?.[0]||'') + ' — $' + (advisor?.top_action?.bet_range?.[1]||'')"></div>
-                        <input type="range" :min="raiseMin" :max="raiseMax" x-model.number="betAmount"
+                        <input type="range" :min="raiseMin" :max="tutorial.active ? raiseMin : raiseMax" x-model.number="betAmount"
                                :step="sliderStep" style="width:100%"
+                               :disabled="tutorial.active"
                                @keydown.left.prevent="betAmount = Math.max(raiseMin, betAmount - 1)"
                                @keydown.right.prevent="betAmount = Math.min(raiseMax, betAmount + 1)"
                                @keydown.down.prevent="betAmount = Math.max(raiseMin, betAmount - 1)"
@@ -714,7 +715,7 @@
                     </div>
                     <div class="bet-amount-display" x-text="'$'+betAmount"></div>
                 </div>
-                <div class="bet-presets">
+                <div class="bet-presets" x-show="!tutorial.active">
                     <button class="bet-preset-btn" @click="setBetPreset(0.5)" title="Half pot">½ Pot</button>
                     <button class="bet-preset-btn" @click="setBetPreset(1.0)" title="Full pot">Pot</button>
                     <button class="bet-preset-btn" @click="setBetPreset(2.0)" title="Double pot">2× Pot</button>
