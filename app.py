@@ -128,8 +128,9 @@ def _run_ai_turn():
             if _game_version != my_version:
                 break
 
-            # Capture street BEFORE action (to detect street changes)
+            # Capture street and community BEFORE action (to detect street changes)
             pre_street = game.street.value
+            pre_community = [c.short for c in game.community_cards]
 
             # Execute the action
             result = game.process_action(player.seat, decision.action, decision.amount)
@@ -139,15 +140,43 @@ def _run_ai_turn():
             post_street = game.street.value
             street_changed = pre_street != post_street and post_street not in ('showdown', 'hand_over')
 
-            # Emit action immediately — don't block on advisor computation
-            socketio.emit("ai_action", {
-                "seat": player.seat,
-                "name": player.name,
-                "decision": decision.to_dict(),
-                "result": result,
-                "state": action_state,
-                "street_changed": street_changed,
-            })
+            if street_changed:
+                # Strip new community cards from ai_action so flop/turn/river
+                # doesn't appear during the AI's action display
+                action_state_no_reveal = dict(action_state)
+                action_state_no_reveal["community_cards"] = pre_community
+                action_state_no_reveal["street"] = pre_street
+
+                socketio.emit("ai_action", {
+                    "seat": player.seat,
+                    "name": player.name,
+                    "decision": decision.to_dict(),
+                    "result": result,
+                    "state": action_state_no_reveal,
+                    "street_changed": False,  # frontend won't delay — we handle it
+                })
+
+                # Pause, then reveal the new street
+                reveal_ms = settings.get('street_reveal_ms', 800)
+                time.sleep(reveal_ms / 1000.0)
+
+                socketio.emit("street_reveal", {
+                    "street": post_street,
+                    "community_cards": action_state["community_cards"],
+                    "state": action_state,
+                })
+
+                # Extra pause after reveal before next AI acts
+                time.sleep(0.5)
+            else:
+                socketio.emit("ai_action", {
+                    "seat": player.seat,
+                    "name": player.name,
+                    "decision": decision.to_dict(),
+                    "result": result,
+                    "state": action_state,
+                    "street_changed": False,
+                })
 
             # If hand ended, stop (no separate state_update — ai_action already has it)
             if game.phase != GamePhase.PLAYING:
@@ -162,12 +191,8 @@ def _run_ai_turn():
                     _push_advisor_async(next_p.seat)
                     break  # Human's turn — exit loop, next iteration would break anyway
 
-            # Pause between AI actions
-            # Use street_reveal_ms + buffer so frontend can animate the transition
-            if street_changed:
-                reveal_ms = settings.get('street_reveal_ms', 800)
-                time.sleep((reveal_ms / 1000.0) + 0.5)
-            else:
+            # Brief pause between same-street AI actions
+            if not street_changed:
                 time.sleep(0.2)
 
 
