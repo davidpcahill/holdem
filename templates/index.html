@@ -14,6 +14,8 @@
 </head>
 <body>
     <div id="app" x-data="pokerApp" x-cloak tabindex="0" @keydown.window="handleKey($event)" :data-card-theme="cardTheme">
+        <!-- Chip animation overlay -->
+        <div class="chip-animation-layer"></div>
 
         <!-- TOP BAR -->
         <header class="topbar">
@@ -87,7 +89,7 @@
             <!-- Players Grid -->
             <div class="players-section">
                 <template x-for="player in state.players" :key="'ps'+player.seat">
-                    <div class="player-seat" :class="{'active-turn': state.action_seat===player.seat && state.phase==='playing', 'folded': player.is_folded, 'all-in': player.is_all_in, 'winner': isWinner(player.seat), 'winner-glow': isWinner(player.seat), 'ai-thinking': aiThinkingSeat===player.seat, 'editable': state.phase !== 'playing'}"
+                    <div class="player-seat" :data-seat="player.seat" :class="{'active-turn': state.action_seat===player.seat && state.phase==='playing', 'folded': player.is_folded, 'all-in': player.is_all_in, 'winner': isWinner(player.seat), 'winner-glow': isWinner(player.seat), 'ai-thinking': aiThinkingSeat===player.seat, 'editable': state.phase !== 'playing'}"
                          :style="'border-left:3px solid '+player.color"
                          @click="state.manual_deal && (pickerTarget='player_'+player.seat)"
                          @dblclick.prevent="openPlayerEditor(player.seat)"
@@ -645,6 +647,10 @@
                                 <option value="minimal">Minimal</option>
                                 <option value="royal">Royal</option>
                             </select>
+                        </div>
+                        <div class="settings-row">
+                            <label title="Animate chips flying from player to pot and back on wins">Chip Animations</label>
+                            <label class="toggle"><input type="checkbox" x-model="chipAnimations"><span class="slider"></span></label>
                         </div>
                     </div>
                     <div class="settings-group">

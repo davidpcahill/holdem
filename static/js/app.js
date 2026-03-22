@@ -71,6 +71,10 @@ document.addEventListener('alpine:init', () => {
         rangeData: null,        // Cached server response
         rangeCurrentHand: null, // [row, col] of current hand on grid
 
+        // Chip Animations
+        chipAnimations: true,
+        _prevPlayerBets: {},   // Track previous bets to detect changes
+
         // Settings (local copy, synced to server)
         localSettings: {
             difficulty: 'medium',
@@ -221,6 +225,10 @@ document.addEventListener('alpine:init', () => {
                     if (data.result?.showdown || data.result?.winners) {
                         this.showdown = data.result;
                         window.pokerSounds?.win();
+                        // Chip win animations
+                        (data.result.winners || []).forEach(w => {
+                            setTimeout(() => this.spawnWinChips(w.seat, w.amount), 300);
+                        });
                         this.startAutoAdvance();
                     }
                 });
@@ -327,6 +335,9 @@ document.addEventListener('alpine:init', () => {
                 this.advisorLoading = false;
             }
 
+            // Chip animations (bet → pot)
+            this._checkChipAnimations(data);
+
             // Pot pulse animation when pot value changes
             if (data.pot !== undefined && data.pot !== this._lastPot && data.pot > 0) {
                 this._potPulse = false;
@@ -423,6 +434,9 @@ document.addEventListener('alpine:init', () => {
                 if (data.showdown || data.winners) {
                     this.showdown = data;
                     window.pokerSounds?.win();
+                    (data.winners || []).forEach(w => {
+                        setTimeout(() => this.spawnWinChips(w.seat, w.amount), 300);
+                    });
                     this.startAutoAdvance();
                 }
             } catch (e) { console.error('Action failed:', e); }
@@ -841,6 +855,99 @@ document.addEventListener('alpine:init', () => {
                 this.rangeCurrentHand = [Math.min(i1, i2), Math.max(i1, i2)]; // Suited above diagonal
             } else {
                 this.rangeCurrentHand = [Math.max(i1, i2), Math.min(i1, i2)]; // Offsuit below diagonal
+            }
+        },
+
+        // ── Chip Animations ──
+
+        spawnChipToPot(seat, amount) {
+            if (!this.chipAnimations) return;
+            const seatEl = document.querySelector(`.player-seat[data-seat="${seat}"]`);
+            const potEl = document.querySelector('.community-pot');
+            const layer = document.querySelector('.chip-animation-layer');
+            if (!seatEl || !potEl || !layer) return;
+
+            const seatRect = seatEl.getBoundingClientRect();
+            const potRect = potEl.getBoundingClientRect();
+
+            const chip = document.createElement('div');
+            chip.className = 'flying-chip';
+            chip.textContent = '🪙';
+            chip.style.left = (seatRect.left + seatRect.width / 2 - 10) + 'px';
+            chip.style.top = (seatRect.top + seatRect.height / 2 - 10) + 'px';
+
+            if (amount > 0) {
+                const amtLabel = document.createElement('span');
+                amtLabel.className = 'flying-chip-amount';
+                amtLabel.textContent = '$' + amount;
+                chip.appendChild(amtLabel);
+            }
+
+            layer.appendChild(chip);
+
+            // Trigger animation after paint
+            requestAnimationFrame(() => {
+                chip.style.left = (potRect.left + potRect.width / 2 - 10) + 'px';
+                chip.style.top = (potRect.top + potRect.height / 2 - 10) + 'px';
+                setTimeout(() => {
+                    chip.classList.add('arrived');
+                    setTimeout(() => chip.remove(), 200);
+                }, 400);
+            });
+        },
+
+        spawnWinChips(seat, amount) {
+            if (!this.chipAnimations) return;
+            const seatEl = document.querySelector(`.player-seat[data-seat="${seat}"]`);
+            const potEl = document.querySelector('.community-pot');
+            const layer = document.querySelector('.chip-animation-layer');
+            if (!seatEl || !potEl || !layer) return;
+
+            const potRect = potEl.getBoundingClientRect();
+            const seatRect = seatEl.getBoundingClientRect();
+
+            // Spawn 3 chips for visual effect
+            for (let i = 0; i < 3; i++) {
+                setTimeout(() => {
+                    const chip = document.createElement('div');
+                    chip.className = 'flying-chip win-chip';
+                    chip.textContent = '🪙';
+                    chip.style.left = (potRect.left + potRect.width / 2 - 10 + (i - 1) * 8) + 'px';
+                    chip.style.top = (potRect.top + potRect.height / 2 - 10) + 'px';
+
+                    if (i === 1) {
+                        const amtLabel = document.createElement('span');
+                        amtLabel.className = 'flying-chip-amount';
+                        amtLabel.textContent = '+$' + amount;
+                        chip.appendChild(amtLabel);
+                    }
+
+                    layer.appendChild(chip);
+                    requestAnimationFrame(() => {
+                        chip.style.left = (seatRect.left + seatRect.width / 2 - 10) + 'px';
+                        chip.style.top = (seatRect.top + seatRect.height / 2 - 10) + 'px';
+                        setTimeout(() => {
+                            chip.classList.add('arrived');
+                            setTimeout(() => chip.remove(), 200);
+                        }, 500);
+                    });
+                }, i * 80);
+            }
+        },
+
+        _checkChipAnimations(data) {
+            if (!this.chipAnimations || !data.players) return;
+            const players = data.players;
+            for (const p of players) {
+                const prevBet = this._prevPlayerBets[p.seat] || 0;
+                if (p.current_bet > prevBet && p.current_bet > 0) {
+                    this.spawnChipToPot(p.seat, p.current_bet - prevBet);
+                }
+            }
+            // Update tracking
+            this._prevPlayerBets = {};
+            for (const p of players) {
+                this._prevPlayerBets[p.seat] = p.current_bet;
             }
         },
 
