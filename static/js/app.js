@@ -211,6 +211,10 @@ document.addEventListener('alpine:init', () => {
                     if (data.state) {
                         this.updateState(data.state);
                     }
+                    // Show next AI's thinking indicator immediately to avoid "waiting" flash
+                    if (data.next_thinking) {
+                        this.aiThinkingSeat = data.next_thinking.seat;
+                    }
                 });
 
                 // Advisor data pushed separately from ai_action to avoid blocking
