@@ -10,7 +10,10 @@ import threading
 import socket
 import time
 import pytest
-from playwright.sync_api import Page
+try:
+    from playwright.sync_api import Page
+except ImportError:
+    Page = None
 
 # Import the Flask app (not started yet)
 import sys, os

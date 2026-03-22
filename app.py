@@ -5,6 +5,7 @@ Single entry point. Run with: python app.py
 Serves the web UI and provides REST + WebSocket API for the game engine.
 """
 
+import logging
 import os
 import time
 import threading
@@ -43,7 +44,7 @@ settings = {
     "deal_speed_ms": 150,
     "street_reveal_ms": 800,
     "pass_play_countdown": 3,
-    "auto_advance": False,
+    "auto_advance": True,
     "auto_advance_delay": 3,
     "hide_hands": True,
     "peek_enabled": False,
@@ -91,6 +92,13 @@ def _run_ai_turn():
     Runs in a background thread, pushes state updates via SocketIO.
     Only emits ai_action events — no redundant state_update emits that can race.
     """
+    try:
+        _run_ai_turn_inner()
+    except Exception:
+        logging.exception("AI turn thread crashed")
+
+
+def _run_ai_turn_inner():
     my_version = _game_version
     my_game = game  # Capture local ref — prevents acting on a replaced game
     with _ai_lock:
