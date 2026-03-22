@@ -12,7 +12,6 @@ from __future__ import annotations
 from enum import Enum
 from typing import List, Optional, Dict, Tuple, Any
 from dataclasses import dataclass, field
-import copy
 import time
 
 from .deck import Card, Deck

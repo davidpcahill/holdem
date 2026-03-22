@@ -6,10 +6,9 @@ Serves the web UI and provides REST + WebSocket API for the game engine.
 """
 
 import os
-import json
 import time
 import threading
-from flask import Flask, render_template, request, jsonify, session
+from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO, emit
 
 from engine.game import GameState, GamePhase, Street
@@ -29,6 +28,7 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 game = GameState()
 ai_engine = AIEngine(timing_preset="realistic", variance=0.3)
 _ai_lock = threading.Lock()
+_seq_lock = threading.Lock()
 _game_version = 0  # Incremented on new game; AI threads check this to abort
 _state_seq = 0     # Monotonic counter so frontend can ignore stale socket updates
 
@@ -52,11 +52,13 @@ settings = {
 def _get_full_state(viewer_seat=None):
     """Build the complete state payload for the frontend."""
     global _state_seq
-    _state_seq += 1
+    with _seq_lock:
+        _state_seq += 1
+        seq = _state_seq
     state = game.get_state(viewer_seat=viewer_seat)
     state["settings"] = settings
     state["hand_histories"] = [h.to_dict() for h in game.hand_histories[-20:]]
-    state["_seq"] = _state_seq
+    state["_seq"] = seq
     return state
 
 

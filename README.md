@@ -11,7 +11,7 @@ A local web-based Texas Hold'em game with AI opponents and a real-time strategy 
 
 Built with Python/Flask backend and vanilla JS frontend. No databases, no accounts, no external dependencies beyond Flask. Runs entirely on your machine.
 
-![Python](https://img.shields.io/badge/Python-3.10+-blue) ![Flask](https://img.shields.io/badge/Flask-3.0+-green) ![Tests](https://img.shields.io/badge/Tests-271%20passing-brightgreen)
+![Python](https://img.shields.io/badge/Python-3.10+-blue) ![Flask](https://img.shields.io/badge/Flask-3.0+-green) ![Tests](https://img.shields.io/badge/Tests-293%20passing-brightgreen)
 
 ## Quick Start
 
@@ -187,6 +187,8 @@ holdem/
     ├── test_ai.py             # 6 tests: AI decision engine, think time, styles
     ├── test_turn_order.py     # 12 tests: turn order, socket events, race conditions
     ├── test_final.py          # Integration: showdown, card reveal, game-over
+    ├── test_e2e.py            # 22 tests: Playwright browser E2E (game lifecycle, mobile, animations)
+    ├── conftest.py            # Shared fixtures: live server, Playwright page
     └── js/
         ├── poker-logic.test.js # 95 tests: UI logic, state management, advisor refresh
         ├── app-socket.test.js  # 30 tests: socket events, reconnection, advisor fetch
@@ -202,10 +204,11 @@ python tests/test_api.py       # 34 tests — REST endpoints, race conditions, a
 python tests/test_ai.py        # 6 tests — AI decision engine, styles, think time
 python tests/test_turn_order.py # 12 tests — turn order, socket events
 python tests/test_final.py     # Integration — showdown, game-over, exports
+pytest tests/test_e2e.py       # 22 tests — Playwright E2E (requires: pip install playwright pytest-playwright)
 npm test                       # 144 tests — UI logic, state management, socket, features
 ```
 
-271 tests (127 Python + 144 JavaScript) covering hand evaluation (all 10 ranks, wheel straights, 7-card best-of-21, tiebreakers), equity calculator (preflop lookup, Monte Carlo convergence), AI decision engine (all 4 styles, think time, edge cases), game lifecycle (blinds, dealing, streets, showdown, side pots), betting validation (min raise, all-in edge cases), undo/redo, turn order (preflop/postflop, skip folded/all-in), race conditions (stale state, game version, sequence numbers, caching), advisor (preflop/postflop analysis, performance, piggybacking), difficulty presets (Easy/Medium/Hard/Expert), stats dashboard (VPIP, WTSD, W$SD, win rate), hand history (hole cards, hand ranks, pot tracking), UI logic (computed properties, display helpers, card visibility, pass-and-play, slider snapping, bet presets, advisor refresh triggers), socket events (seq filtering, stale event rejection, reconnection, state recovery), AbortController cancellation, AI thinking indicator lifecycle, manual dealing, card assignment, player editing, history export, settings persistence, and HTML feature completeness.
+293 tests (149 Python + 144 JavaScript) covering hand evaluation (all 10 ranks, wheel straights, 7-card best-of-21, tiebreakers), equity calculator (preflop lookup, Monte Carlo convergence), AI decision engine (all 4 styles, think time, edge cases), game lifecycle (blinds, dealing, streets, showdown, side pots), betting validation (min raise, all-in edge cases), undo/redo, turn order (preflop/postflop, skip folded/all-in), race conditions (stale state, game version, sequence numbers, caching), advisor (preflop/postflop analysis, performance, piggybacking), difficulty presets (Easy/Medium/Hard/Expert), stats dashboard (VPIP, WTSD, W$SD, win rate), hand history (hole cards, hand ranks, pot tracking), UI logic (computed properties, display helpers, card visibility, pass-and-play, slider snapping, bet presets, advisor refresh triggers), socket events (seq filtering, stale event rejection, reconnection, state recovery), AbortController cancellation, AI thinking indicator lifecycle, manual dealing, card assignment, player editing, history export, settings persistence, HTML feature completeness, and end-to-end browser tests (game flow, mobile viewport, sidebar navigation, animations, sound controls).
 
 ## API Endpoints
 

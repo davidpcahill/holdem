@@ -172,7 +172,7 @@
 
 /* ── Pot Amount Pulse (when pot changes) ── */
 .pot-amount-pulse {
-    animation: potPulse 0.4s ease-out;
+    animation: potPulse 0.4s ease-out forwards;
 }
 @keyframes potPulse {
     0% { transform: scale(1); }
@@ -190,7 +190,7 @@
 }
 
 /* ── Fold Fade-Out ── */
-.player-seat.is-folded .playing-card {
+.player-seat.folded .playing-card {
     transition: opacity 0.3s ease, transform 0.3s ease;
     opacity: 0.3;
     transform: scale(0.9);

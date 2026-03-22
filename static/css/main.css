@@ -993,9 +993,11 @@
     }
     .player-seat {
         padding: 8px;
+        min-height: 44px; /* Touch-friendly minimum */
     }
     .seat-name { font-size: 12px; }
     .seat-stack { font-size: 11px; }
+    .seat-badges .badge { font-size: 0.6rem; padding: 1px 4px; }
 
     .community-section {
         padding: 10px 8px;
@@ -1010,7 +1012,28 @@
     }
     .action-btn {
         font-size: 13px;
-        padding: 8px 12px;
+        padding: 10px 12px;
+        min-height: 48px; /* iOS recommended touch target */
+    }
+    .action-buttons {
+        gap: 6px;
+    }
+
+    /* Bet controls full width */
+    .bet-controls {
+        width: 100%;
+    }
+    .bet-slider-row {
+        gap: 8px;
+    }
+    .bet-preset-btn {
+        min-height: 40px;
+        padding: 8px 10px;
+        font-size: 12px;
+    }
+    .bet-amount-display {
+        font-size: 0.9rem;
+        min-width: 60px;
     }
 
     /* Card picker grid smaller */
@@ -1021,9 +1044,46 @@
         font-size: 11px;
         padding: 3px 2px;
     }
+    .card-picker-column {
+        min-width: 0;
+        width: auto;
+    }
 
     /* Sidebar wider on small phones */
     .sidebar {
         width: 100vw !important;
     }
+
+    /* Showdown overlay mobile-friendly */
+    .showdown-card {
+        width: 95% !important;
+        max-width: 95vw !important;
+        padding: 16px !important;
+    }
+    .showdown-card .playing-card {
+        width: 32px !important;
+        height: 44px !important;
+    }
+
+    /* Setup modal mobile */
+    .modal {
+        max-width: 95vw !important;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+    .modal-body {
+        padding: 12px;
+    }
+
+    /* Settings mobile */
+    .settings-row {
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+    .settings-row input[type="range"] {
+        min-width: 80px;
+    }
+
+    /* Keyboard shortcuts hidden on mobile (touch only) */
+    .kbd { display: none; }
 }

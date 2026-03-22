@@ -36,6 +36,9 @@
                     <span class="info-value" x-text="state.players?.[state.action_seat]?.name || ''"></span>
                 </div>
             </div>
+            <div class="connection-lost" x-show="!_socketConnected && _wasDisconnected" x-cloak
+                 style="font-size:0.7rem;color:var(--orange-accent);padding:2px 8px;border-radius:var(--radius-sm);background:rgba(243,156,18,0.1)"
+                 title="Connection lost — reconnecting...">⚠ Reconnecting…</div>
             <div class="topbar-spacer"></div>
             <div class="topbar-actions">
                 <button class="btn btn-sm" @click="showSetup = true" title="Configure a new game">New Game</button>
@@ -58,8 +61,8 @@
             <!-- Community Cards -->
             <div class="community-section">
                 <div class="community-header">
-                    <span class="community-street" x-text="streetDisplay"></span>
-                    <div class="community-pot"><span class="pot-icon">💰</span> <span x-text="'$' + state.pot"></span></div>
+                    <span class="community-street street-badge" x-text="streetDisplay"></span>
+                    <div class="community-pot" :class="{'pot-amount-pulse': _potPulse}"><span class="pot-icon">💰</span> <span x-text="'$' + state.pot"></span></div>
                 </div>
                 <div class="community-cards">
                     <template x-for="i in 5" :key="'cc'+i">
@@ -84,7 +87,7 @@
             <!-- Players Grid -->
             <div class="players-section">
                 <template x-for="player in state.players" :key="'ps'+player.seat">
-                    <div class="player-seat" :class="{'active-turn': state.action_seat===player.seat && state.phase==='playing', 'folded': player.is_folded, 'all-in': player.is_all_in, 'winner': isWinner(player.seat), 'ai-thinking': aiThinkingSeat===player.seat, 'editable': state.phase !== 'playing'}"
+                    <div class="player-seat" :class="{'active-turn': state.action_seat===player.seat && state.phase==='playing', 'folded': player.is_folded, 'all-in': player.is_all_in, 'winner': isWinner(player.seat), 'winner-glow': isWinner(player.seat), 'ai-thinking': aiThinkingSeat===player.seat, 'editable': state.phase !== 'playing'}"
                          :style="'border-left:3px solid '+player.color"
                          @click="state.manual_deal && (pickerTarget='player_'+player.seat)"
                          @dblclick.prevent="openPlayerEditor(player.seat)"
@@ -97,10 +100,10 @@
                                 <span class="spinner" x-show="aiThinkingSeat===player.seat"></span>
                             </div>
                             <div class="seat-badges">
-                                <span class="badge badge-gold" x-show="state.positions?.[player.seat]" x-text="state.positions?.[player.seat]||''" :title="positionTooltip(state.positions?.[player.seat]||'')"></span>
+                                <span class="badge badge-gold" :class="{'dealer-badge': state.positions?.[player.seat]==='BTN'}" x-show="state.positions?.[player.seat]" x-text="state.positions?.[player.seat]||''" :title="positionTooltip(state.positions?.[player.seat]||'')"></span>
                             </div>
                         </div>
-                        <div class="seat-stack">$<span class="seat-stack-value" x-text="player.stack.toLocaleString()"></span></div>
+                        <div class="seat-stack" :class="{'winner-chips': isWinner(player.seat)}">$<span class="seat-stack-value" x-text="player.stack.toLocaleString()"></span></div>
                         <div class="seat-cards">
                             <template x-if="shouldShowCards(player)">
                                 <template x-for="card in player.hole_cards" :key="card.short">
@@ -492,6 +495,19 @@
                         </div>
                     </div>
                     <div class="settings-group">
+                        <div class="settings-group-title">Sound</div>
+                        <div class="settings-row">
+                            <label title="Enable or disable all sound effects">Sound Effects</label>
+                            <label class="toggle"><input type="checkbox" x-model="soundEnabled" @change="if(window.pokerSounds){window.pokerSounds.enabled=soundEnabled;if(soundEnabled)window.pokerSounds._ensureCtx()}"><span class="slider"></span></label>
+                        </div>
+                        <div class="settings-row" x-show="soundEnabled">
+                            <label title="Master volume for all sound effects">Volume</label>
+                            <input type="range" min="0" max="100" x-model.number="soundVolume"
+                                   @input="if(window.pokerSounds)window.pokerSounds.volume=$event.target.value/100">
+                            <span class="settings-value" x-text="soundVolume+'%'"></span>
+                        </div>
+                    </div>
+                    <div class="settings-group">
                         <div class="settings-group-title">Shortcuts</div>
                         <div style="font-size:0.8rem;color:var(--text-secondary);display:flex;flex-direction:column;gap:4px">
                             <div><span class="kbd">F</span> Fold</div>
@@ -752,8 +768,8 @@
 
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.3/dist/cdn.min.js" defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
-    <script src="/static/js/sounds.js?v=8"></script>
-    <script src="/static/js/poker-logic.js?v=8"></script>
-    <script src="/static/js/app.js?v=8"></script>
+    <script src="/static/js/sounds.js?v=9"></script>
+    <script src="/static/js/poker-logic.js?v=9"></script>
+    <script src="/static/js/app.js?v=9"></script>
 </body>
 </html>

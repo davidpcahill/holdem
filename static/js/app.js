@@ -28,6 +28,7 @@ document.addEventListener('alpine:init', () => {
         socket: null,
         mobileSidebar: false,
         soundEnabled: true,
+        soundVolume: 30,
 
         // Card picker
         pickerTarget: 'community',
@@ -45,6 +46,8 @@ document.addEventListener('alpine:init', () => {
         _lastStreet: '',
         _lastHandNum: 0,
         _lastSeq: 0,
+        _lastPot: 0,
+        _potPulse: false,
 
         // Pass & Play
         hideHands: true,
@@ -309,6 +312,13 @@ document.addEventListener('alpine:init', () => {
             if (newHand) {
                 this.advisor = null;
                 this.advisorLoading = false;
+            }
+
+            // Pot pulse animation when pot value changes
+            if (data.pot !== undefined && data.pot !== this._lastPot && data.pot > 0) {
+                this._potPulse = false;
+                requestAnimationFrame(() => { this._potPulse = true; });
+                this._lastPot = data.pot;
             }
 
             if (data.street && data.street !== this._lastStreet) {
