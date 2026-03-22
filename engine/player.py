@@ -78,6 +78,13 @@ class Player:
         self.times_raised = 0
         self.times_called = 0
         self.times_folded = 0
+        self.hands_won = 0
+        self.total_winnings = 0           # Gross chips won (pot amounts)
+        self.total_invested = 0           # Gross chips bet across all hands
+        self.biggest_pot_won = 0
+        self.starting_stack = stack       # For session P&L tracking
+        self.times_went_to_showdown = 0   # Hands that reached showdown
+        self.times_won_at_showdown = 0    # Hands won at showdown (not fold-wins)
 
     @property
     def is_human(self) -> bool:
@@ -111,6 +118,20 @@ class Player:
             return float(self.times_raised) if self.times_raised else 0.0
         return self.times_raised / self.times_called
 
+    @property
+    def wtsd(self) -> float:
+        """Went To Showdown percentage."""
+        if self.hands_played == 0:
+            return 0.0
+        return (self.times_went_to_showdown / self.hands_played) * 100
+
+    @property
+    def wsd(self) -> float:
+        """Won at Showdown percentage."""
+        if self.times_went_to_showdown == 0:
+            return 0.0
+        return (self.times_won_at_showdown / self.times_went_to_showdown) * 100
+
     def reset_for_new_hand(self) -> None:
         """Clear per-hand state. Called at the start of each new hand."""
         self.hole_cards = []
@@ -141,8 +162,12 @@ class Player:
     def win_chips(self, amount: int) -> None:
         """Add chips to stack (pot winnings)."""
         self.stack += amount
+        self.hands_won += 1
+        self.total_winnings += amount
+        if amount > self.biggest_pot_won:
+            self.biggest_pot_won = amount
 
-    def record_action(self, action: str) -> None:
+    def record_action(self, action: str, amount: int = 0) -> None:
         """Update lifetime stats based on action taken."""
         if action == "fold":
             self.times_folded += 1
@@ -152,6 +177,8 @@ class Player:
         elif action in ("raise", "bet"):
             self.times_raised += 1
             self.hands_voluntarily_put_in += 1
+        if amount > 0:
+            self.total_invested += amount
 
     def to_dict(self, reveal_cards: bool = False) -> dict:
         """
@@ -175,8 +202,18 @@ class Player:
             "total_bet_this_hand": self.total_bet_this_hand,
             "has_acted": self.has_acted,
             "hands_played": self.hands_played,
+            "hands_won": self.hands_won,
             "vpip": round(self.vpip, 1),
             "aggression_factor": round(self.aggression_factor, 2),
+            "win_rate": round((self.hands_won / self.hands_played * 100) if self.hands_played else 0, 1),
+            "net_profit": self.stack - self.starting_stack,
+            "total_winnings": self.total_winnings,
+            "biggest_pot_won": self.biggest_pot_won,
+            "times_folded": self.times_folded,
+            "times_raised": self.times_raised,
+            "times_called": self.times_called,
+            "wtsd": round(self.wtsd, 1),
+            "wsd": round(self.wsd, 1),
         }
         if reveal_cards and self.hole_cards:
             data["hole_cards"] = [c.to_dict() for c in self.hole_cards]

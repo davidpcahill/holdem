@@ -46,6 +46,7 @@ class HandLogEntry:
     amount: int = 0
     is_all_in: bool = False
     timestamp: float = 0.0
+    pot_after: int = 0             # Pot size after this action
 
     def to_dict(self) -> dict:
         return {
@@ -55,6 +56,7 @@ class HandLogEntry:
             "action": self.action,
             "amount": self.amount,
             "is_all_in": self.is_all_in,
+            "pot_after": self.pot_after,
         }
 
 
@@ -67,6 +69,8 @@ class HandHistory:
     actions: List[HandLogEntry] = field(default_factory=list)
     winners: List[dict] = field(default_factory=list)  # [{seat, name, amount, hand_name}]
     pot_total: int = 0
+    hole_cards: dict = field(default_factory=dict)     # {seat: [card_short, ...]}
+    hand_ranks: dict = field(default_factory=dict)     # {seat: "Pair of Aces"}
 
     def to_dict(self) -> dict:
         return {
@@ -75,6 +79,8 @@ class HandHistory:
             "actions": [a.to_dict() for a in self.actions],
             "winners": self.winners,
             "pot_total": self.pot_total,
+            "hole_cards": self.hole_cards,
+            "hand_ranks": self.hand_ranks,
         }
 
 
@@ -433,7 +439,7 @@ class GameState:
                     p.has_acted = False
 
         player.has_acted = True
-        player.record_action(actual_action)
+        player.record_action(actual_action, chips_in)
 
         # Log
         self._log_action(seat, actual_action, chips_in, result.is_all_in)
@@ -522,6 +528,10 @@ class GameState:
 
         players_in = [p for p in self.players if p.is_in_hand]
 
+        # Track showdown participation
+        for p in players_in:
+            p.times_went_to_showdown += 1
+
         # Evaluate each player's hand
         hand_results: List[Tuple[int, HandResult]] = []
         for p in players_in:
@@ -583,11 +593,21 @@ class GameState:
 
         winners_info = list(seat_totals.values())
 
+        # Track showdown win stats
+        for wseat in seat_totals:
+            self.players[wseat].times_won_at_showdown += 1
+
         # Log results
         if self.current_hand_log:
             self.current_hand_log.winners = winners_info
             self.current_hand_log.pot_total = self.pot
             self.current_hand_log.community_cards = [c.short for c in self.community_cards]
+            # Capture hole cards and hand ranks for history
+            for p in self.players:
+                if p.hole_cards:
+                    self.current_hand_log.hole_cards[p.seat] = [c.short for c in p.hole_cards]
+            for seat, result in hand_results:
+                self.current_hand_log.hand_ranks[seat] = result.name
             self.hand_histories.append(self.current_hand_log)
 
         self.phase = GamePhase.BETWEEN_HANDS
@@ -620,6 +640,10 @@ class GameState:
             self.current_hand_log.winners = winners_info
             self.current_hand_log.pot_total = self.pot
             self.current_hand_log.community_cards = [c.short for c in self.community_cards]
+            # Capture hole cards for history
+            for p in self.players:
+                if p.hole_cards:
+                    self.current_hand_log.hole_cards[p.seat] = [c.short for c in p.hole_cards]
             self.hand_histories.append(self.current_hand_log)
 
         self.phase = GamePhase.BETWEEN_HANDS
@@ -904,6 +928,7 @@ class GameState:
                 amount=amount,
                 is_all_in=is_all_in,
                 timestamp=time.time(),
+                pot_after=self.pot,
             )
             self.current_hand_log.actions.append(entry)
 

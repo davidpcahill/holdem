@@ -78,6 +78,43 @@ TIMING_PRESETS = {
     "tournament": 1.8,  # Slow, dramatic
 }
 
+# Difficulty presets bundle style behavior + timing + variance
+# Used by the setup UI to offer Easy/Medium/Hard without tuning individual params
+DIFFICULTY_PRESETS = {
+    "easy": {
+        "label": "Easy",
+        "description": "Passive, predictable, fast — great for learning",
+        "ai_style": "loose_passive",
+        "timing_preset": "fast",
+        "variance": 0.5,        # More erratic = weaker
+        "equity_sims": 200,     # Fewer sims = worse decisions
+    },
+    "medium": {
+        "label": "Medium",
+        "description": "Balanced play with moderate aggression",
+        "ai_style": "random",
+        "timing_preset": "realistic",
+        "variance": 0.3,
+        "equity_sims": 500,
+    },
+    "hard": {
+        "label": "Hard",
+        "description": "Tight-aggressive with sharp reads",
+        "ai_style": "tight_aggressive",
+        "timing_preset": "realistic",
+        "variance": 0.1,        # Less random = stronger
+        "equity_sims": 1000,
+    },
+    "expert": {
+        "label": "Expert",
+        "description": "GTO-balanced, minimal mistakes, tournament pace",
+        "ai_style": "gto",
+        "timing_preset": "tournament",
+        "variance": 0.05,       # Nearly optimal
+        "equity_sims": 2000,
+    },
+}
+
 
 class AIEngine:
     """

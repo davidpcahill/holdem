@@ -617,6 +617,114 @@ def test_advisor_piggybacked_on_action_response():
 
 
 # ════════════════════════════════════════════════
+# Difficulty Presets
+# ════════════════════════════════════════════════
+
+def test_difficulty_presets_endpoint():
+    """GET /api/difficulty_presets returns all preset configs."""
+    with app.test_client() as c:
+        result = api(c, 'GET', '/api/difficulty_presets')
+        assert 'easy' in result
+        assert 'medium' in result
+        assert 'hard' in result
+        assert 'expert' in result
+        for key in ('ai_style', 'timing_preset', 'variance', 'equity_sims'):
+            assert key in result['easy'], f"Preset 'easy' should have '{key}'"
+
+
+def test_difficulty_setting_applies():
+    """Changing difficulty via settings should update timing and variance."""
+    with app.test_client() as c:
+        _new_game(c)
+        result = api(c, 'POST', '/api/settings', {'difficulty': 'expert'})
+        assert result['ok']
+        s = result['settings']
+        assert s['difficulty'] == 'expert'
+        assert s['timing_preset'] == 'tournament'  # Expert uses tournament timing
+        assert s['variance'] == 5  # Expert variance = 0.05 * 100
+
+
+def test_advisor_sims_setting():
+    """Advisor sims setting should be persisted and returned."""
+    with app.test_client() as c:
+        _new_game(c)
+        result = api(c, 'POST', '/api/settings', {'advisor_sims': 2000})
+        assert result['ok']
+        assert result['settings']['advisor_sims'] == 2000
+        # Verify it persists on GET
+        s = api(c, 'GET', '/api/settings')
+        assert s['advisor_sims'] == 2000
+
+
+# ════════════════════════════════════════════════
+# Hand History Enhancement
+# ════════════════════════════════════════════════
+
+def test_hand_history_includes_hole_cards():
+    """Hand history should capture hole cards after hand ends."""
+    with app.test_client() as c:
+        _new_game(c)
+        api(c, 'POST', '/api/new_hand')
+        play_hand_to_end(c)
+        state = api(c, 'GET', '/api/state')
+        histories = state.get('hand_histories', [])
+        if histories:
+            h = histories[-1]
+            assert 'hole_cards' in h, "Hand history should include hole_cards"
+            # At least one player should have cards logged
+            if h['hole_cards']:
+                some_cards = list(h['hole_cards'].values())[0]
+                assert len(some_cards) == 2, "Each player should have 2 hole cards"
+
+
+def test_hand_history_pot_after_in_actions():
+    """Each action in hand history should include pot_after field."""
+    with app.test_client() as c:
+        _new_game(c)
+        api(c, 'POST', '/api/new_hand')
+        play_hand_to_end(c)
+        state = api(c, 'GET', '/api/state')
+        histories = state.get('hand_histories', [])
+        if histories and histories[-1].get('actions'):
+            for action in histories[-1]['actions']:
+                assert 'pot_after' in action, "Actions should include pot_after"
+
+
+# ════════════════════════════════════════════════
+# Stats Dashboard
+# ════════════════════════════════════════════════
+
+def test_player_stats_tracked():
+    """Player stats (win_rate, net_profit, etc.) should be in state after playing."""
+    with app.test_client() as c:
+        _new_game(c)
+        api(c, 'POST', '/api/new_hand')
+        play_hand_to_end(c)
+        state = api(c, 'GET', '/api/state')
+        for p in state.get('players', []):
+            assert 'win_rate' in p, f"Player {p['name']} should have win_rate"
+            assert 'net_profit' in p, f"Player {p['name']} should have net_profit"
+            assert 'hands_won' in p, f"Player {p['name']} should have hands_won"
+            assert 'biggest_pot_won' in p, f"Player {p['name']} should have biggest_pot_won"
+            assert 'wtsd' in p, f"Player {p['name']} should have wtsd"
+            assert 'wsd' in p, f"Player {p['name']} should have wsd"
+            assert 'times_folded' in p, f"Player {p['name']} should have times_folded"
+
+
+def test_winner_stats_increment():
+    """The winner of a hand should have hands_won > 0."""
+    with app.test_client() as c:
+        _new_game(c)
+        api(c, 'POST', '/api/new_hand')
+        play_hand_to_end(c)
+        state = api(c, 'GET', '/api/state')
+        players = state.get('players', [])
+        # At least one player should have won
+        assert any(p.get('hands_won', 0) > 0 for p in players), \
+            "At least one player should have hands_won > 0 after a hand"
+
+
+# ════════════════════════════════════════════════
 # Runner
 # ════════════════════════════════════════════════
 

@@ -57,8 +57,10 @@ document.addEventListener('alpine:init', () => {
 
         // Settings (local copy, synced to server)
         localSettings: {
+            difficulty: 'medium',
             timing_preset: 'realistic',
             variance: 30,
+            advisor_sims: 1000,
             burn_cards: true,
             auto_escalate: false,
             escalate_interval: 10,

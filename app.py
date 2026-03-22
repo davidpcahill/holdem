@@ -15,7 +15,7 @@ from flask_socketio import SocketIO, emit
 from engine.game import GameState, GamePhase, Street
 from engine.player import PlayerType, AIStyle
 from engine.equity import EquityCalculator
-from engine.ai import AIEngine, AIDecision
+from engine.ai import AIEngine, AIDecision, DIFFICULTY_PRESETS
 from engine.advisor import Advisor
 
 app = Flask(__name__)
@@ -34,8 +34,10 @@ _state_seq = 0     # Monotonic counter so frontend can ignore stale socket updat
 
 # Settings
 settings = {
+    "difficulty": "medium",   # easy/medium/hard/expert or "custom"
     "timing_preset": "realistic",
     "variance": 30,           # 0-100
+    "advisor_sims": 1000,     # Monte Carlo simulations for advisor (100-5000)
     "deal_speed_ms": 150,
     "street_reveal_ms": 800,
     "pass_play_countdown": 3,
@@ -116,8 +118,11 @@ def _run_ai_turn():
             if not community:
                 equity = EquityCalculator.preflop_equity(player.hole_cards, num_opponents)
             else:
+                # Use difficulty-based sim count for AI equity calc
+                _diff = settings.get("difficulty", "medium")
+                _ai_sims = DIFFICULTY_PRESETS.get(_diff, {}).get("equity_sims", 500)
                 equity = EquityCalculator.monte_carlo(
-                    player.hole_cards, community, num_opponents, simulations=500
+                    player.hole_cards, community, num_opponents, simulations=_ai_sims
                 )
 
             # Get valid actions
@@ -393,8 +398,9 @@ def _compute_advisor(seat: int) -> dict:
     if not community:
         equity = EquityCalculator.preflop_equity(player.hole_cards, opponents)
     else:
+        _adv_sims = max(100, min(5000, settings.get("advisor_sims", 1000)))
         equity = EquityCalculator.monte_carlo(
-            player.hole_cards, community, opponents, simulations=1000
+            player.hole_cards, community, opponents, simulations=_adv_sims
         )
 
     valid = game.get_valid_actions(seat)
@@ -506,8 +512,19 @@ def api_settings():
     global settings, ai_engine
     if request.method == "POST":
         data = request.json or {}
+        # If difficulty changed, apply the preset values
+        if "difficulty" in data and data["difficulty"] in DIFFICULTY_PRESETS:
+            preset = DIFFICULTY_PRESETS[data["difficulty"]]
+            settings["difficulty"] = data["difficulty"]
+            settings["timing_preset"] = preset["timing_preset"]
+            settings["variance"] = int(preset["variance"] * 100)
+            # Apply AI style to all AI players
+            from engine.player import AIStyle
+            for p in game.players:
+                if p.player_type.value == "ai":
+                    p.ai_style = AIStyle(preset["ai_style"])
         for key in data:
-            if key in settings:
+            if key in settings and key != "difficulty":
                 settings[key] = data[key]
         # Update AI engine with new settings
         ai_engine = AIEngine(
@@ -517,6 +534,12 @@ def api_settings():
         game.burn_cards_enabled = settings.get("burn_cards", True)
         return jsonify({"ok": True, "settings": settings})
     return jsonify(settings)
+
+
+@app.route("/api/difficulty_presets")
+def api_difficulty_presets():
+    """Return available difficulty presets for the setup UI."""
+    return jsonify(DIFFICULTY_PRESETS)
 
 
 @app.route("/api/update_player", methods=["POST"])
@@ -558,7 +581,13 @@ def api_export_history():
 
     for hh in game.hand_histories:
         lines.append(f"--- Hand #{hh.hand_number} ---")
-        lines.append(f"Community: {' '.join(hh.community_cards) if hh.community_cards else '(none)'}")
+        # Show hole cards if available
+        if hh.hole_cards:
+            for seat, cards in sorted(hh.hole_cards.items()):
+                pname = hh.players[seat]["name"] if seat < len(hh.players) else f"Seat {seat}"
+                rank_str = f" → {hh.hand_ranks[seat]}" if seat in hh.hand_ranks else ""
+                lines.append(f"  {pname}: [{' '.join(cards)}]{rank_str}")
+        lines.append(f"  Community: {' '.join(hh.community_cards) if hh.community_cards else '(none)'}")
 
         current_street = ""
         for action in hh.actions:
@@ -568,7 +597,8 @@ def api_export_history():
                 lines.append(f"  [{current_street.upper()}]")
             amt = f" ${a['amount']}" if a.get("amount", 0) > 0 else ""
             allin = " (ALL-IN)" if a.get("is_all_in") else ""
-            lines.append(f"    {a['player_name']} {a['action']}{amt}{allin}")
+            pot_str = f" (pot: ${a.get('pot_after', '?')})" if a.get("pot_after") else ""
+            lines.append(f"    {a['player_name']} {a['action']}{amt}{allin}{pot_str}")
 
         if hh.winners:
             for w in hh.winners:

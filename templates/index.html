@@ -164,6 +164,7 @@
             <div class="sidebar-tabs">
                 <div class="sidebar-tab" :class="{active:sidebarTab==='advisor'}" @click="sidebarTab='advisor'">Advisor</div>
                 <div class="sidebar-tab" :class="{active:sidebarTab==='log'}" @click="sidebarTab='log'">Log</div>
+                <div class="sidebar-tab" :class="{active:sidebarTab==='stats'}" @click="sidebarTab='stats'">Stats</div>
                 <div class="sidebar-tab" :class="{active:sidebarTab==='settings'}" @click="sidebarTab='settings'">Settings</div>
             </div>
             <div class="sidebar-content">
@@ -349,11 +350,91 @@
                         </template>
                     </div>
                 </div>
+                <!-- Stats Dashboard -->
+                <div class="sidebar-panel" :class="{active:sidebarTab==='stats'}">
+                    <div class="stats-dashboard" x-show="state.players?.length">
+                        <template x-for="p in state.players" :key="p.seat">
+                            <div class="stats-player-card">
+                                <div class="stats-player-header" :style="'border-left: 3px solid ' + (p.color || 'var(--text-primary)')">
+                                    <span class="stats-player-name" x-text="p.name"></span>
+                                    <span class="stats-player-type" x-text="p.player_type === 'ai' ? '(' + formatAIStyle(p.ai_style) + ')' : '(Human)'"></span>
+                                </div>
+                                <div class="stats-grid">
+                                    <div class="stat-item" title="Current chip stack">
+                                        <span class="stat-label">Stack</span>
+                                        <span class="stat-value" x-text="'$' + (p.stack || 0).toLocaleString()"></span>
+                                    </div>
+                                    <div class="stat-item" title="Net profit/loss this session">
+                                        <span class="stat-label">Net P&L</span>
+                                        <span class="stat-value" :class="{'stat-positive': p.net_profit > 0, 'stat-negative': p.net_profit < 0}" x-text="(p.net_profit >= 0 ? '+$' : '-$') + Math.abs(p.net_profit || 0).toLocaleString()"></span>
+                                    </div>
+                                    <div class="stat-item" title="Hands won / hands played">
+                                        <span class="stat-label">Win Rate</span>
+                                        <span class="stat-value" x-text="(p.win_rate || 0) + '%'"></span>
+                                    </div>
+                                    <div class="stat-item" title="Biggest single pot won">
+                                        <span class="stat-label">Best Pot</span>
+                                        <span class="stat-value" x-text="'$' + (p.biggest_pot_won || 0).toLocaleString()"></span>
+                                    </div>
+                                </div>
+                                <div class="stats-bars">
+                                    <div class="stat-bar-row" title="Voluntarily Put In Pot — % of hands where player voluntarily bet or called (higher = looser)">
+                                        <span class="stat-bar-label">VPIP</span>
+                                        <div class="stat-bar-track">
+                                            <div class="stat-bar-fill" :style="'width:' + Math.min(p.vpip || 0, 100) + '%; background: ' + (p.vpip > 50 ? 'var(--red-accent)' : p.vpip > 30 ? 'var(--gold)' : 'var(--green-accent)')"></div>
+                                        </div>
+                                        <span class="stat-bar-value" x-text="(p.vpip || 0) + '%'"></span>
+                                    </div>
+                                    <div class="stat-bar-row" title="Aggression Factor — Raises / Calls ratio (higher = more aggressive)">
+                                        <span class="stat-bar-label">AF</span>
+                                        <div class="stat-bar-track">
+                                            <div class="stat-bar-fill" :style="'width:' + Math.min((p.aggression_factor || 0) * 25, 100) + '%; background: var(--blue-accent)'"></div>
+                                        </div>
+                                        <span class="stat-bar-value" x-text="(p.aggression_factor || 0).toFixed(1)"></span>
+                                    </div>
+                                    <div class="stat-bar-row" title="Went To Showdown — % of hands that reached showdown">
+                                        <span class="stat-bar-label">WTSD</span>
+                                        <div class="stat-bar-track">
+                                            <div class="stat-bar-fill" :style="'width:' + Math.min(p.wtsd || 0, 100) + '%; background: var(--text-secondary)'"></div>
+                                        </div>
+                                        <span class="stat-bar-value" x-text="(p.wtsd || 0) + '%'"></span>
+                                    </div>
+                                    <div class="stat-bar-row" title="Won at Showdown — % of showdowns won (higher = better hand selection)">
+                                        <span class="stat-bar-label">W$SD</span>
+                                        <div class="stat-bar-track">
+                                            <div class="stat-bar-fill" :style="'width:' + Math.min(p.wsd || 0, 100) + '%; background: var(--gold)'"></div>
+                                        </div>
+                                        <span class="stat-bar-value" x-text="(p.wsd || 0) + '%'"></span>
+                                    </div>
+                                </div>
+                                <div class="stats-counts" x-show="p.hands_played > 0">
+                                    <span title="Hands played" x-text="p.hands_played + ' hands'"></span> ·
+                                    <span title="Times folded" x-text="(p.times_folded || 0) + ' folds'"></span> ·
+                                    <span title="Times raised" x-text="(p.times_raised || 0) + ' raises'"></span>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                    <div class="sidebar-empty" x-show="!state.players?.length">
+                        Start a game to see player statistics.
+                    </div>
+                </div>
+
                 <!-- Settings -->
                 <div class="sidebar-panel" :class="{active:sidebarTab==='settings'}">
                     <div class="settings-group">
                         <div class="settings-group-title">AI Behavior</div>
                         <div class="settings-row">
+                            <label title="Preset difficulty that bundles AI style, speed, and variance">Difficulty</label>
+                            <select x-model="localSettings.difficulty" @change="saveSettings()">
+                                <option value="easy">Easy — Passive, predictable</option>
+                                <option value="medium">Medium — Balanced</option>
+                                <option value="hard">Hard — Tight-aggressive</option>
+                                <option value="expert">Expert — GTO, minimal mistakes</option>
+                                <option value="custom">Custom</option>
+                            </select>
+                        </div>
+                        <div class="settings-row" x-show="localSettings.difficulty === 'custom'">
                             <label title="Overall AI decision speed">Speed</label>
                             <select x-model="localSettings.timing_preset" @change="saveSettings()">
                                 <option value="fast">Fast / Practice</option>
@@ -361,7 +442,7 @@
                                 <option value="tournament">Tournament</option>
                             </select>
                         </div>
-                        <div class="settings-row">
+                        <div class="settings-row" x-show="localSettings.difficulty === 'custom'">
                             <label title="0% = robotic. 100% = erratic.">Variance</label>
                             <input type="range" min="0" max="100" x-model.number="localSettings.variance" @change="saveSettings()">
                             <span class="settings-value" x-text="localSettings.variance+'%'"></span>
@@ -372,6 +453,11 @@
                         <div class="settings-row">
                             <label title="Show equity, outs, pot odds, recommendations, and other advisor stats. Disabling hides all visual aids without affecting AI play.">Enable Advisor</label>
                             <label class="toggle"><input type="checkbox" x-model="advisorEnabled"><span class="slider"></span></label>
+                        </div>
+                        <div class="settings-row">
+                            <label title="Monte Carlo simulations for equity calculation. Higher = more accurate but slower. 500-1000 recommended.">Advisor Precision</label>
+                            <input type="range" min="100" max="5000" step="100" x-model.number="localSettings.advisor_sims" @change="saveSettings()">
+                            <span class="settings-value" x-text="localSettings.advisor_sims"></span>
                         </div>
                     </div>
                     <div class="settings-group">
@@ -666,8 +752,8 @@
 
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.3/dist/cdn.min.js" defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
-    <script src="/static/js/sounds.js?v=7"></script>
-    <script src="/static/js/poker-logic.js?v=7"></script>
-    <script src="/static/js/app.js?v=7"></script>
+    <script src="/static/js/sounds.js?v=8"></script>
+    <script src="/static/js/poker-logic.js?v=8"></script>
+    <script src="/static/js/app.js?v=8"></script>
 </body>
 </html>
