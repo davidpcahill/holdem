@@ -75,9 +75,20 @@ document.addEventListener('alpine:init', () => {
         chipAnimations: true,
         _prevPlayerBets: {},   // Track previous bets to detect changes
 
-        // Tutorial
-        tutorialMode: false,
-        tutorialDismissed: [],  // IDs of dismissed concepts
+        // Tutorial (scripted 10-hand mode)
+        tutorial: {
+            active: false,
+            complete: false,
+            handIndex: 0,
+            totalHands: 10,
+            title: null,
+            intro: null,       // {title, body} shown before hand
+            outro: null,       // {title, body} shown after hand
+            guided: null,      // {action, tip} current guided action
+            showIntro: false,
+            showOutro: false,
+            showComplete: false,
+        },
 
         // Settings (local copy, synced to server)
         localSettings: {
@@ -445,7 +456,17 @@ document.addEventListener('alpine:init', () => {
                     (data.winners || []).forEach(w => {
                         setTimeout(() => this.spawnWinChips(w.seat, w.amount), 300);
                     });
-                    this.startAutoAdvance();
+                    if (!this.tutorial.active) this.startAutoAdvance();
+                }
+                // Tutorial: update guided action and show outro
+                if (this.tutorial.active) {
+                    if (data.guided) this.tutorial.guided = data.guided;
+                    else this.tutorial.guided = null;
+                    if (data.outro) {
+                        this.tutorial.outro = data.outro;
+                        // Delay showing outro to let showdown display first
+                        setTimeout(() => { this.tutorial.showOutro = true; }, 1500);
+                    }
                 }
             } catch (e) { console.error('Action failed:', e); }
         },
@@ -866,44 +887,85 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
-        // ── Tutorial ──
+        // ── Tutorial (Scripted 10-Hand Mode) ──
 
-        async startTutorialGame() {
-            // Configure an easy tutorial game with advisor on
-            this.tutorialMode = true;
-            this.tutorialDismissed = [];
-            this.advisorEnabled = true;
-            this.setupData = {
-                small_blind: 5,
-                big_blind: 10,
-                players: [
-                    { name: 'You', stack: 1000, player_type: 'human', ai_style: 'random', adaptive: false },
-                    { name: 'Tutorial Bot', stack: 1000, player_type: 'ai', ai_style: 'loose_passive', adaptive: false },
-                ],
-            };
-            // Set easy difficulty and tutorial mode on server
-            await fetch('/api/settings', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    difficulty: 'easy',
-                    tutorial_mode: true,
-                    _tutorial_seen: [],
-                }),
-            });
-            this.startGame();
+        async startTutorial() {
+            try {
+                const res = await fetch('/api/tutorial/start', { method: 'POST' });
+                const data = await res.json();
+                if (data.ok) {
+                    this.showSetup = false;
+                    this.advisorEnabled = true;
+                    this.tutorial.active = true;
+                    this.tutorial.complete = false;
+                    this.tutorial.handIndex = 0;
+                    this.tutorial.intro = data.intro;
+                    this.tutorial.showIntro = true;
+                    this.tutorial.showOutro = false;
+                    this.tutorial.showComplete = false;
+                    this.updateState(data.state);
+                }
+            } catch (e) { console.error('Tutorial start failed:', e); }
         },
 
-        dismissTutorialTip(conceptId) {
-            if (!this.tutorialDismissed.includes(conceptId)) {
-                this.tutorialDismissed.push(conceptId);
-                // Sync to server
-                fetch('/api/settings', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ _tutorial_seen: this.tutorialDismissed }),
-                });
-            }
+        async tutorialDeal() {
+            this.tutorial.showIntro = false;
+            try {
+                const res = await fetch('/api/tutorial/deal', { method: 'POST' });
+                const data = await res.json();
+                if (data.ok) {
+                    this.showdown = null;
+                    this.advisor = null;
+                    this.aiThinkingSeat = -1;
+                    this.updateState(data.state);
+                    if (data.guided) {
+                        this.tutorial.guided = data.guided;
+                    }
+                    if (data.tutorial) {
+                        this.tutorial.handIndex = data.tutorial.hand_index;
+                        this.tutorial.title = data.tutorial.title;
+                        this.tutorial.totalHands = data.tutorial.total_hands;
+                    }
+                    // Fetch advisor for the current state
+                    if (this.canAct && this.advisorEnabled) {
+                        this.fetchAdvisor();
+                    }
+                }
+            } catch (e) { console.error('Tutorial deal failed:', e); }
+        },
+
+        async tutorialNext() {
+            this.tutorial.showOutro = false;
+            try {
+                const res = await fetch('/api/tutorial/next', { method: 'POST' });
+                const data = await res.json();
+                if (data.ok) {
+                    if (data.complete) {
+                        this.tutorial.complete = true;
+                        this.tutorial.showComplete = true;
+                    } else {
+                        this.tutorial.intro = data.intro;
+                        this.tutorial.showIntro = true;
+                        this.tutorial.guided = null;
+                        if (data.tutorial) {
+                            this.tutorial.handIndex = data.tutorial.hand_index;
+                            this.tutorial.title = data.tutorial.title;
+                        }
+                    }
+                }
+            } catch (e) { console.error('Tutorial next failed:', e); }
+        },
+
+        async tutorialSkip() {
+            this.tutorial.active = false;
+            this.tutorial.showIntro = false;
+            this.tutorial.showOutro = false;
+            this.tutorial.showComplete = false;
+            this.tutorial.guided = null;
+            try {
+                await fetch('/api/tutorial/skip', { method: 'POST' });
+            } catch (e) {}
+            this.showSetup = true;
         },
 
         // ── Chip Animations ──

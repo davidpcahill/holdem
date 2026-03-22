@@ -276,6 +276,19 @@ class Deck:
         """Return all cards still in the deck (copy)."""
         return list(self._cards)
 
+    def stack_top(self, cards: List[Card]) -> None:
+        """Place specific cards at the top of the deck in order.
+
+        Removes them from their current position first, then prepends
+        so that draw_one() returns cards[0] first, then cards[1], etc.
+        """
+        for card in cards:
+            try:
+                self._cards.remove(card)
+            except ValueError:
+                pass  # Card already dealt/burned — still stack it
+        self._cards = list(cards) + self._cards
+
     def __len__(self) -> int:
         return len(self._cards)
 

@@ -473,71 +473,53 @@ def test_all_positions_exist():
 # Tutorial Tests
 # ========================================================================
 
-def test_tutorial_tip_first_always():
-    """First unseen concept with 'always' trigger is returned."""
-    from engine.tutorial import get_tutorial_tip
-    tip = get_tutorial_tip({"equity": {"win": 50}}, "preflop", "BTN", 1, [])
-    assert tip is not None
-    assert tip["id"] == "hand_strength"
-    assert "title" in tip
-    assert "explanation" in tip
+def test_tutorial_hands_exist():
+    """Tutorial has exactly 10 scripted hands."""
+    from engine.tutorial import TUTORIAL_HANDS
+    assert len(TUTORIAL_HANDS) == 10
 
 
-def test_tutorial_tip_skips_seen():
-    """Concepts already in seen_concepts are skipped."""
-    from engine.tutorial import get_tutorial_tip
-    tip = get_tutorial_tip(
-        {"equity": {"win": 50}}, "preflop", "BTN", 1, ["hand_strength"]
-    )
-    assert tip is not None
-    assert tip["id"] == "position"  # Next concept that matches
+def test_tutorial_state_progression():
+    """TutorialState tracks progress through all 10 hands."""
+    from engine.tutorial import TutorialState
+    ts = TutorialState()
+    assert ts.hand_index == 0
+    assert ts.is_active
+    for _ in range(9):
+        ts.advance_hand()
+    assert not ts.is_complete
+    ts.advance_hand()
+    assert ts.is_complete
+    assert not ts.is_active
 
 
-def test_tutorial_tip_none_when_all_seen():
-    """Returns None when all concepts have been seen."""
-    from engine.tutorial import get_tutorial_tip, TUTORIAL_CONCEPTS
-    all_ids = [c["id"] for c in TUTORIAL_CONCEPTS]
-    tip = get_tutorial_tip({"equity": {"win": 50}}, "preflop", "BTN", 1, all_ids)
-    assert tip is None
+def test_tutorial_guided_actions():
+    """Each hand has guided actions with action and tip fields."""
+    from engine.tutorial import TUTORIAL_HANDS
+    for i, hand in enumerate(TUTORIAL_HANDS):
+        for g in hand["guided"]:
+            assert "action" in g, f"Hand {i+1} guided missing action"
+            assert "tip" in g, f"Hand {i+1} guided missing tip"
+            assert "street" in g, f"Hand {i+1} guided missing street"
 
 
-def test_tutorial_tip_none_without_advisor():
-    """Returns None when advisor_result is None."""
-    from engine.tutorial import get_tutorial_tip
-    tip = get_tutorial_tip(None, "preflop", "BTN", 1, [])
-    assert tip is None
+def test_tutorial_bot_scripts():
+    """Each hand has a bot_script with valid actions."""
+    from engine.tutorial import TUTORIAL_HANDS
+    valid_actions = {"fold", "call", "check", "bet", "raise"}
+    for i, hand in enumerate(TUTORIAL_HANDS):
+        for street, actions in hand["bot_script"].items():
+            for a in actions:
+                assert a["action"] in valid_actions, f"Hand {i+1} street {street}: invalid bot action {a['action']}"
 
 
-def test_tutorial_tip_pot_odds_trigger():
-    """Pot odds concept triggers when facing a bet."""
-    from engine.tutorial import get_tutorial_tip
-    seen = ["hand_strength", "position"]
-    tip = get_tutorial_tip(
-        {"pot_odds": 16.7, "equity": {"win": 40}}, "flop", "BTN", 3, seen
-    )
-    assert tip is not None
-    assert tip["id"] == "pot_odds"
-
-
-def test_tutorial_tip_outs_trigger():
-    """Outs concept triggers when outs count > 0."""
-    from engine.tutorial import get_tutorial_tip
-    seen = ["hand_strength", "position", "pot_odds"]
-    tip = get_tutorial_tip(
-        {"outs": {"count": 9, "draws": ["flush draw"]}}, "flop", "CO", 4, seen
-    )
-    assert tip is not None
-    assert tip["id"] == "outs"
-
-
-def test_tutorial_concepts_have_required_fields():
-    """Every concept has id, title, explanation, and trigger."""
-    from engine.tutorial import TUTORIAL_CONCEPTS
-    for concept in TUTORIAL_CONCEPTS:
-        assert "id" in concept, f"Missing id in concept"
-        assert "title" in concept, f"Missing title in {concept['id']}"
-        assert "explanation" in concept, f"Missing explanation in {concept['id']}"
-        assert "trigger" in concept, f"Missing trigger in {concept['id']}"
+def test_tutorial_cards_parseable():
+    """All card strings in tutorial hands parse correctly."""
+    from engine.tutorial import TUTORIAL_HANDS
+    from engine.deck import Card
+    for i, hand in enumerate(TUTORIAL_HANDS):
+        for c in hand["player_cards"] + hand["bot_cards"] + hand["community"]:
+            Card.from_short(c)  # Should not raise
 
 
 # Runner

@@ -180,14 +180,13 @@
                     <div x-show="!advisorEnabled" style="padding:20px;text-align:center;color:var(--text-muted);font-size:0.85rem">
                         Advisor is disabled. Enable it in Settings or the New Game dialog.
                     </div>
-                    <!-- Tutorial Tip -->
-                    <div class="tutorial-tip" x-show="tutorialMode && advisor?.tutorial && !tutorialDismissed.includes(advisor?.tutorial?.id)" x-cloak>
+                    <!-- Tutorial Guided Tip -->
+                    <div class="tutorial-tip" x-show="tutorial.active && tutorial.guided?.tip" x-cloak>
                         <div class="tutorial-tip-header">
-                            <span class="tutorial-tip-badge">📖 Tutorial</span>
-                            <span class="tutorial-tip-title" x-text="advisor?.tutorial?.title"></span>
+                            <span class="tutorial-tip-badge">Hand <span x-text="tutorial.handIndex + 1"></span>/<span x-text="tutorial.totalHands"></span></span>
+                            <span class="tutorial-tip-title" x-text="tutorial.title"></span>
                         </div>
-                        <div class="tutorial-tip-body" x-text="advisor?.tutorial?.explanation"></div>
-                        <button class="btn btn-sm btn-gold" @click="dismissTutorialTip(advisor?.tutorial?.id)" style="margin-top:6px;align-self:flex-start">Got it!</button>
+                        <div class="tutorial-tip-body" x-html="(tutorial.guided?.tip || '').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')"></div>
                     </div>
                     <div class="advisor-section" x-show="advisorEnabled && advisor" :style="advisorLoading ? 'opacity:0.4;pointer-events:none' : ''">
                         <!-- Equity bar -->
@@ -661,10 +660,7 @@
                             <label title="Animate chips flying from player to pot and back on wins">Chip Animations</label>
                             <label class="toggle"><input type="checkbox" x-model="chipAnimations"><span class="slider"></span></label>
                         </div>
-                        <div class="settings-row">
-                            <label title="Show contextual poker concept tips in the Advisor panel">Tutorial Tips</label>
-                            <label class="toggle"><input type="checkbox" x-model="tutorialMode" @change="fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tutorial_mode:tutorialMode})})"><span class="slider"></span></label>
-                        </div>
+                        <!-- Tutorial is now a scripted mode via New Game modal -->
                     </div>
                     <div class="settings-group">
                         <div class="settings-group-title">Sound</div>
@@ -697,9 +693,9 @@
         <!-- ACTION BAR -->
         <div class="action-bar" :class="{inactive:!canAct}">
             <div class="action-buttons">
-                <button class="action-btn fold-btn" @click="doAction('fold')" :disabled="!canAct">Fold <span class="kbd">F</span></button>
-                <button class="action-btn check-call-btn" @click="doCheckCall()" :disabled="!canAct"><span x-text="checkCallLabel"></span> <span class="kbd">C</span></button>
-                <button class="action-btn raise-btn" @click="doRaise()" :disabled="!canRaise"><span x-text="raiseLabel"></span> <span class="kbd">R</span></button>
+                <button class="action-btn fold-btn" :class="{'guided-action': tutorial.active && tutorial.guided?.action === 'fold'}" @click="doAction('fold')" :disabled="!canAct">Fold <span class="kbd">F</span></button>
+                <button class="action-btn check-call-btn" :class="{'guided-action': tutorial.active && (tutorial.guided?.action === 'call' || tutorial.guided?.action === 'check')}" @click="doCheckCall()" :disabled="!canAct"><span x-text="checkCallLabel"></span> <span class="kbd">C</span></button>
+                <button class="action-btn raise-btn" :class="{'guided-action': tutorial.active && (tutorial.guided?.action === 'raise' || tutorial.guided?.action === 'bet')}" @click="doRaise()" :disabled="!canRaise"><span x-text="raiseLabel"></span> <span class="kbd">R</span></button>
             </div>
             <div class="bet-controls" x-show="canRaise">
                 <div class="bet-slider-row">
@@ -795,7 +791,7 @@
                 <div class="modal-footer">
                     <button class="btn" @click="showSetup=false">Cancel</button>
                     <div style="margin-left:auto;display:flex;gap:8px">
-                        <button class="btn btn-gold" @click="startTutorialGame()" title="Start a guided tutorial game with tips and an easy opponent">📖 Tutorial Game</button>
+                        <button class="btn btn-gold" @click="startTutorial()" title="Learn poker with 10 scripted hands">Learn Poker</button>
                         <button class="btn btn-primary btn-lg" @click="startNewGame()">Start Game</button>
                     </div>
                 </div>
@@ -933,6 +929,60 @@
             </div>
         </div>
 
+        <!-- TUTORIAL PROGRESS BAR -->
+        <div class="tutorial-progress" x-show="tutorial.active && !tutorial.showIntro && !tutorial.showOutro && !tutorial.showComplete" x-cloak>
+            <div class="tutorial-progress-inner">
+                <span class="tutorial-progress-label">Hand <span x-text="tutorial.handIndex + 1"></span> of <span x-text="tutorial.totalHands"></span> — <span x-text="tutorial.title"></span></span>
+                <div class="tutorial-progress-bar">
+                    <div class="tutorial-progress-fill" :style="`width:${((tutorial.handIndex) / tutorial.totalHands) * 100}%`"></div>
+                </div>
+                <button class="btn btn-xs" @click="tutorialSkip()" style="margin-left:8px;opacity:0.7">Skip</button>
+            </div>
+        </div>
+
+        <!-- TUTORIAL INTRO MODAL -->
+        <div class="modal-overlay" x-show="tutorial.showIntro" x-cloak style="z-index:800">
+            <div class="modal tutorial-modal" @click.stop style="max-width:500px">
+                <div class="tutorial-modal-header">
+                    <span class="tutorial-hand-badge">Hand <span x-text="tutorial.handIndex + 1"></span>/<span x-text="tutorial.totalHands"></span></span>
+                </div>
+                <h2 class="tutorial-modal-title" x-text="tutorial.intro?.title"></h2>
+                <div class="tutorial-modal-body" x-html="(tutorial.intro?.body || '').replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')"></div>
+                <div class="modal-footer" style="justify-content:center;gap:12px">
+                    <button class="btn" @click="tutorialSkip()" style="opacity:0.7">Skip Tutorial</button>
+                    <button class="btn btn-gold btn-lg" @click="tutorialDeal()">Deal Hand</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- TUTORIAL OUTRO MODAL -->
+        <div class="modal-overlay" x-show="tutorial.showOutro" x-cloak style="z-index:800">
+            <div class="modal tutorial-modal" @click.stop style="max-width:500px">
+                <h2 class="tutorial-modal-title" x-text="tutorial.outro?.title"></h2>
+                <div class="tutorial-modal-body" x-html="(tutorial.outro?.body || '').replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/[✓•]/g, '<br>$&')"></div>
+                <div class="modal-footer" style="justify-content:center">
+                    <button class="btn btn-gold btn-lg" @click="tutorialNext()" x-text="tutorial.handIndex >= tutorial.totalHands - 1 ? 'See Results' : 'Next Hand'"></button>
+                </div>
+            </div>
+        </div>
+
+        <!-- TUTORIAL COMPLETE -->
+        <div class="modal-overlay" x-show="tutorial.showComplete" x-cloak style="z-index:800">
+            <div class="modal tutorial-modal" @click.stop style="max-width:500px;text-align:center">
+                <div style="font-size:3rem;margin-bottom:12px">🎓</div>
+                <h2 class="tutorial-modal-title">Tutorial Complete!</h2>
+                <div class="tutorial-modal-body">
+                    You've mastered the fundamentals of Texas Hold'em!<br><br>
+                    <strong>Concepts learned:</strong><br>
+                    Hand Strength &bull; Position &bull; Pot Odds &bull; Outs Math &bull;
+                    C-Betting &bull; Fold Equity &bull; Bet Sizing &bull; Semi-Bluffing &bull; All-In Decisions
+                </div>
+                <div class="modal-footer" style="justify-content:center;gap:12px">
+                    <button class="btn btn-gold btn-lg" @click="tutorial.showComplete = false; tutorial.active = false; showSetup = true;">Start Real Game</button>
+                </div>
+            </div>
+        </div>
+
         <!-- GAME OVER OVERLAY -->
         <div class="modal-overlay" x-show="state.game_over && !gameOverDismissed" x-cloak style="z-index:700">
             <div class="showdown-card" style="min-width:350px;border-color:var(--gold-bright);box-shadow:0 0 40px rgba(212,168,67,0.5)">
@@ -954,8 +1004,8 @@
 
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.3/dist/cdn.min.js" defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
-    <script src="/static/js/sounds.js?v=11"></script>
-    <script src="/static/js/poker-logic.js?v=11"></script>
-    <script src="/static/js/app.js?v=11"></script>
+    <script src="/static/js/sounds.js?v=12"></script>
+    <script src="/static/js/poker-logic.js?v=12"></script>
+    <script src="/static/js/app.js?v=12"></script>
 </body>
 </html>
