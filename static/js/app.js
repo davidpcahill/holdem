@@ -491,7 +491,12 @@ document.addEventListener('alpine:init', () => {
 
         executeRecommendation(rec) {
             if (!this.canAct) return;
-            if (this.tutorial.active) return; // Tutorial: ignore advisor recommendations
+            // Tutorial: only allow if it matches the guided action
+            if (this.tutorial.active && this.tutorial.guided) {
+                const ga = this.tutorial.guided.action;
+                const ra = rec.action;
+                if (ra !== ga && !(ra === 'bet' && ga === 'raise') && !(ra === 'raise' && ga === 'bet')) return;
+            }
             const action = rec.action;
             if (action === 'fold') {
                 this.doAction('fold');

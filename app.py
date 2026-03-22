@@ -376,6 +376,9 @@ def api_action():
     if seat is None or action is None:
         return jsonify({"error": "Missing seat or action"}), 400
 
+    # Capture street before action (it may advance after process_action)
+    pre_action_street = game.street.value if game.phase == GamePhase.PLAYING else None
+
     result = game.process_action(seat, action, amount)
 
     if "error" in result:
@@ -384,11 +387,16 @@ def api_action():
     full_state = _get_full_state()
     result["state"] = full_state
 
-    # Broadcast state update
-    socketio.emit("state_update", full_state)
+    # Broadcast state update (skip during tutorial — HTTP response carries all state)
+    if not (tutorial_state and tutorial_state.is_active):
+        socketio.emit("state_update", full_state)
 
     # Tutorial mode: run scripted bot turns synchronously
     if tutorial_state and tutorial_state.is_active:
+        # Human just took a guided action — consume it on the street it was taken
+        if pre_action_street:
+            tutorial_state.consume_guided(pre_action_street)
+
         # Run bot actions until it's the player's turn or hand ends
         while (game.phase == GamePhase.PLAYING
                 and game.action_seat >= 0
@@ -610,6 +618,9 @@ def api_tutorial_deal():
     if not hand:
         return jsonify({"error": "Tutorial complete"}), 400
 
+    # Reset action tracking for this hand
+    tutorial_state.reset_hand_state()
+
     # Reset stacks for this hand
     stack = hand.get("stack_override", 1000)
     for p in game.players:
@@ -632,14 +643,17 @@ def api_tutorial_deal():
     # Get guided action for current street
     guided = tutorial_state.get_guided_action(game.street.value)
 
-    # If first actor is the bot, run scripted bot action
-    if (game.phase == GamePhase.PLAYING
+    # Run bot actions until it's the player's turn
+    while (game.phase == GamePhase.PLAYING
             and game.action_seat >= 0
             and game.players[game.action_seat].player_type == PlayerType.AI):
         bot_result = _run_tutorial_bot()
-        if bot_result:
-            full = _get_full_state()
-            guided = tutorial_state.get_guided_action(game.street.value)
+        if not bot_result:
+            break
+        if bot_result.get("showdown") or bot_result.get("winners"):
+            break
+    full = _get_full_state()
+    guided = tutorial_state.get_guided_action(game.street.value)
 
     return jsonify({
         "ok": True,
@@ -695,12 +709,17 @@ def _run_tutorial_bot() -> Optional[dict]:
     if player.player_type != PlayerType.AI:
         return None
 
-    # Get scripted action
-    bot_action = tutorial_state.get_bot_action(game.street.value)
+    street = game.street.value
+
+    # Get scripted action (tracked by per-street index)
+    bot_action = tutorial_state.get_bot_action(street)
+    tutorial_state.consume_bot_action(street)
+
     if not bot_action:
-        # Default: check if possible, else fold
+        # No script entry — default: check if possible, else fold
         valid = game.get_valid_actions(player.seat)
-        if "check" in valid.get("actions", []):
+        valid_actions = [a["action"] for a in valid.get("actions", [])]
+        if "check" in valid_actions:
             bot_action = {"action": "check", "amount": 0}
         else:
             bot_action = {"action": "fold", "amount": 0}
@@ -708,10 +727,21 @@ def _run_tutorial_bot() -> Optional[dict]:
     action = bot_action["action"]
     amount = bot_action.get("amount", 0)
 
-    # For raises with amount=0, go all-in
-    if action == "raise" and amount == 0:
-        valid = game.get_valid_actions(player.seat)
-        amount = player.stack  # all-in
+    # For raises/bets with amount=0, go all-in
+    if action in ("raise", "bet") and amount == 0:
+        amount = player.stack
+
+    # Validate the action is legal; if not, fallback
+    valid = game.get_valid_actions(player.seat)
+    valid_actions = [a["action"] for a in valid.get("actions", [])]
+    if action not in valid_actions:
+        # Fallback chain: call → check → fold
+        if "call" in valid_actions:
+            action, amount = "call", 0
+        elif "check" in valid_actions:
+            action, amount = "check", 0
+        else:
+            action, amount = "fold", 0
 
     result = game.process_action(player.seat, action, amount)
 
