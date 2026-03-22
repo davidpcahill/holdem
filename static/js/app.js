@@ -181,6 +181,8 @@ document.addEventListener('alpine:init', () => {
                 });
 
                 this.socket.on('ai_action', (data) => {
+                    // Ignore stale events from a previous game
+                    if (data.state?._seq && data.state._seq < this._lastSeq) return;
                     this.aiThinkingSeat = -1;
                     // Mark advisor as loading — advisor_update event will follow
                     this.advisorLoading = true;
@@ -203,6 +205,8 @@ document.addEventListener('alpine:init', () => {
 
                 // Street reveal: server sends this AFTER a delay when flop/turn/river is dealt
                 this.socket.on('street_reveal', (data) => {
+                    // Ignore stale events from a previous game
+                    if (data.state?._seq && data.state._seq < this._lastSeq) return;
                     window.pokerSounds?.streetReveal();
                     if (data.state) {
                         this.updateState(data.state);
@@ -339,9 +343,13 @@ document.addEventListener('alpine:init', () => {
                 const res = await fetch('/api/new_hand', { method: 'POST' });
                 const data = await res.json();
                 if (data.ok) {
-                    this.updateState(data.state);
+                    // Clear stale state BEFORE applying new state
                     this.showdown = null;
                     this.advisor = null;
+                    this.advisorLoading = false;
+                    this._advisorFetchId++;  // Invalidate in-flight advisor fetches
+                    this.aiThinkingSeat = -1;
+                    this.updateState(data.state);
                 }
             } catch (e) { console.error('New hand failed:', e); }
         },
