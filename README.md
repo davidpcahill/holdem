@@ -11,7 +11,7 @@ A local web-based Texas Hold'em game with AI opponents and a real-time strategy 
 
 Built with Python/Flask backend and vanilla JS frontend. No databases, no accounts, no external dependencies beyond Flask. Runs entirely on your machine.
 
-![Python](https://img.shields.io/badge/Python-3.10+-blue) ![Flask](https://img.shields.io/badge/Flask-3.0+-green) ![Tests](https://img.shields.io/badge/Tests-257%20passing-brightgreen)
+![Python](https://img.shields.io/badge/Python-3.10+-blue) ![Flask](https://img.shields.io/badge/Flask-3.0+-green) ![Tests](https://img.shields.io/badge/Tests-271%20passing-brightgreen)
 
 ## Quick Start
 
@@ -37,6 +37,7 @@ Open **http://localhost:5000** in your browser.
 - **Tight-Aggressive**: Folds weak hands, 3-bets strong, pressures opponents
 - **GTO**: Balanced ranges, mixed strategies, positional awareness
 - **Random** (default): Picks a different base style each decision — unpredictable
+- **Difficulty Presets**: Easy / Medium / Hard / Expert — bundles AI style, timing, variance, and equity simulations
 - Configurable think time and variance (0% robotic → 100% erratic)
 - Speed presets: Fast/Practice, Realistic, Tournament
 - Tracks opponent VPIP and aggression factor over time
@@ -84,9 +85,20 @@ For sharing one device between multiple human players:
 - Color picker for seat customization
 - Mid-game type switching (human ↔ AI) between hands
 
+### Stats Dashboard
+Per-player statistics tracked across all hands:
+- **Win Rate**: Hands won / hands played
+- **VPIP**: Voluntarily Put In Pot percentage (visual bar)
+- **Aggression Factor**: Raise-to-call ratio
+- **WTSD**: Went To Showdown percentage
+- **W$SD**: Won Money at Showdown percentage
+- Net P&L, biggest pot won, fold/raise counts
+
 ### Hand History
 - Live action log with color-coded player names and street headers
 - Full scrollable history of all previous hands with winners and amounts
+- Hole cards and hand ranks preserved in history exports
+- Pot size tracked after each action
 - Copy to clipboard or download as `.txt` file
 
 ### Sound Effects
@@ -96,8 +108,21 @@ All synthesized via Web Audio API — no external audio files:
 - Pass-and-play countdown ticks
 - On by default, toggle via toolbar or `M` key
 
+### Animations
+CSS keyframe animations for a polished feel:
+- Card dealing (flip + slide), chip sliding to pot, pot win glow
+- Dealer button pop, street badge entrance, fold fade-out
+- AI thinking pulse, active turn glow, connection status pulse
+
+### Mobile Responsive
+- Optimized layout at 600px breakpoint for phones
+- Smaller cards and seats, full-width sidebar
+- Touch-friendly button targets (44px minimum)
+
 ### Settings
-- AI speed preset and variance
+- **AI Difficulty**: Easy / Medium / Hard / Expert (or Custom for manual tuning)
+- **Advisor Precision**: Configurable Monte Carlo simulation count (100–5000)
+- AI speed preset and variance (visible in Custom mode)
 - Burn cards toggle
 - Card Picker mode
 - Advisor on/off
@@ -158,13 +183,14 @@ holdem/
 └── tests/
     ├── test_engine.py         # 49 tests: cards, deck, all hand ranks, kickers, equity
     ├── test_game.py           # 38 tests: game lifecycle, side pots, undo, turn order
-    ├── test_api.py            # 27 tests: REST endpoints, race conditions, caching, advisor perf
+    ├── test_api.py            # 34 tests: REST endpoints, race conditions, caching, advisor, difficulty, stats
     ├── test_ai.py             # 6 tests: AI decision engine, think time, styles
     ├── test_turn_order.py     # 12 tests: turn order, socket events, race conditions
     ├── test_final.py          # Integration: showdown, card reveal, game-over
     └── js/
         ├── poker-logic.test.js # 95 tests: UI logic, state management, advisor refresh
-        └── app-socket.test.js  # 30 tests: socket events, reconnection, advisor fetch
+        ├── app-socket.test.js  # 30 tests: socket events, reconnection, advisor fetch
+        └── features.test.js    # 19 tests: difficulty presets, stats, history, advisor sims
 ```
 
 ## Tests
@@ -172,14 +198,14 @@ holdem/
 ```bash
 python tests/test_engine.py    # 49 tests — card primitives, hand evaluation, equity
 python tests/test_game.py      # 38 tests — game state machine, side pots, undo, turn order
-python tests/test_api.py       # 27 tests — REST endpoints, race conditions, advisor perf
+python tests/test_api.py       # 34 tests — REST endpoints, race conditions, advisor, difficulty, stats
 python tests/test_ai.py        # 6 tests — AI decision engine, styles, think time
 python tests/test_turn_order.py # 12 tests — turn order, socket events
 python tests/test_final.py     # Integration — showdown, game-over, exports
-npm test                       # 125 tests — UI logic, state management, socket, reconnection
+npm test                       # 144 tests — UI logic, state management, socket, features
 ```
 
-257 tests (132 Python + 125 JavaScript) covering hand evaluation (all 10 ranks, wheel straights, 7-card best-of-21, tiebreakers), equity calculator (preflop lookup, Monte Carlo convergence), AI decision engine (all 4 styles, think time, edge cases), game lifecycle (blinds, dealing, streets, showdown, side pots), betting validation (min raise, all-in edge cases), undo/redo, turn order (preflop/postflop, skip folded/all-in), race conditions (stale state, game version, sequence numbers, caching), advisor (preflop/postflop analysis, performance, piggybacking), UI logic (computed properties, display helpers, card visibility, pass-and-play, slider snapping, bet presets, advisor refresh triggers), socket events (seq filtering, stale event rejection, reconnection, state recovery), AbortController cancellation, AI thinking indicator lifecycle, manual dealing, card assignment, player editing, history export, settings persistence, and HTML feature completeness.
+271 tests (127 Python + 144 JavaScript) covering hand evaluation (all 10 ranks, wheel straights, 7-card best-of-21, tiebreakers), equity calculator (preflop lookup, Monte Carlo convergence), AI decision engine (all 4 styles, think time, edge cases), game lifecycle (blinds, dealing, streets, showdown, side pots), betting validation (min raise, all-in edge cases), undo/redo, turn order (preflop/postflop, skip folded/all-in), race conditions (stale state, game version, sequence numbers, caching), advisor (preflop/postflop analysis, performance, piggybacking), difficulty presets (Easy/Medium/Hard/Expert), stats dashboard (VPIP, WTSD, W$SD, win rate), hand history (hole cards, hand ranks, pot tracking), UI logic (computed properties, display helpers, card visibility, pass-and-play, slider snapping, bet presets, advisor refresh triggers), socket events (seq filtering, stale event rejection, reconnection, state recovery), AbortController cancellation, AI thinking indicator lifecycle, manual dealing, card assignment, player editing, history export, settings persistence, and HTML feature completeness.
 
 ## API Endpoints
 
@@ -197,6 +223,7 @@ npm test                       # 125 tests — UI logic, state management, socke
 | `POST` | `/api/toggle_manual_deal` | Toggle Card Picker mode |
 | `POST` | `/api/update_player` | Edit player settings between hands |
 | `GET/POST` | `/api/settings` | Read or update game settings |
+| `GET` | `/api/difficulty_presets` | List available AI difficulty presets |
 | `GET` | `/api/export_history` | Download hand history as text |
 
 ## How the Advisor Math Works
