@@ -412,6 +412,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         async newHand() {
+            if (this.tutorial.active) return;  // Tutorial manages hand transitions
             if (!this.state.can_start_hand && this.state.phase === 'playing') return;
             try {
                 const res = await fetch('/api/new_hand', { method: 'POST' });
@@ -1170,6 +1171,7 @@ document.addEventListener('alpine:init', () => {
                 case 'c': if (this.canAct) this.doCheckCall(); break;
                 case 'r': if (this.canRaise) this.doRaise(); break;
                 case 'n':
+                    if (this.tutorial.active) break;  // Tutorial handles hand transitions via modals
                     if (this.showdown) this.dismissShowdown();
                     this.newHand();
                     break;

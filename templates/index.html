@@ -44,8 +44,8 @@
             <div class="topbar-spacer"></div>
             <div class="topbar-actions">
                 <button class="btn btn-sm" @click="showSetup = true" title="Configure a new game">New Game</button>
-                <button class="btn btn-sm btn-primary" @click="newHand()" :disabled="!state.can_start_hand">New Hand <span class="kbd">N</span></button>
-                <button class="btn btn-sm" @click="undoAction()" :disabled="state.phase !== 'playing'" title="Undo the last action">Undo <span class="kbd">Z</span></button>
+                <button class="btn btn-sm btn-primary" @click="newHand()" :disabled="!state.can_start_hand || tutorial.active">New Hand <span class="kbd">N</span></button>
+                <button class="btn btn-sm" @click="undoAction()" :disabled="state.phase !== 'playing' || tutorial.active" title="Undo the last action">Undo <span class="kbd">Z</span></button>
                 <button class="btn btn-sm" :class="{'btn-gold': state.manual_deal}" @click="toggleManualDeal()" title="Card Picker: assign real cards to get advisor recommendations">🃏 Picker</button>
                 <button class="btn btn-sm" :class="{'btn-gold': hideHands}" @click="hideHands = !hideHands"
                         title="Hide Hands: enable pass-and-play mode where each player's cards are hidden until their turn">
@@ -745,8 +745,8 @@
                     <div>
                         <label style="font-size:0.8rem;font-weight:600;color:var(--text-secondary);text-transform:uppercase">Players (<span x-text="setupData.players.length"></span>/10)</label>
                         <!-- Column headers -->
-                        <div style="display:grid;grid-template-columns:24px 1fr 80px 85px 120px 24px;gap:8px;padding:6px 10px;font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.3px">
-                            <span>#</span><span>Name</span><span>Stack</span><span>Type</span><span>AI Style</span><span title="Adaptive AI: adjusts strategy based on opponent stats">Adapt</span><span></span>
+                        <div style="display:grid;grid-template-columns:24px 1fr 80px 85px 120px 40px 24px;gap:8px;padding:6px 10px;font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.3px">
+                            <span>#</span><span style="padding-left:11px">Name</span><span style="padding-left:11px">Stack</span><span style="padding-left:11px">Type</span><span style="padding-left:11px">AI Style</span><span title="Adaptive AI: adjusts strategy based on opponent stats" style="text-align:center">Adapt</span><span></span>
                         </div>
                         <div style="display:flex;flex-direction:column;gap:6px">
                             <template x-for="(p,idx) in setupData.players" :key="'sp'+idx">
@@ -919,11 +919,11 @@
                 </template>
 
                 <!-- Auto-advance indicator -->
-                <div x-show="localSettings.auto_advance && showdown" style="font-size:0.7rem;color:var(--text-muted);margin-top:8px">
+                <div x-show="localSettings.auto_advance && showdown && !tutorial.active" style="font-size:0.7rem;color:var(--text-muted);margin-top:8px">
                     Auto-dealing in <span x-text="localSettings.auto_advance_delay"></span>s...
                 </div>
 
-                <div style="display:flex;gap:8px;justify-content:center;margin-top:12px">
+                <div x-show="!tutorial.active" style="display:flex;gap:8px;justify-content:center;margin-top:12px">
                     <button class="btn" @click="dismissShowdown()">Dismiss</button>
                     <button class="btn btn-gold" @click="dismissShowdown();newHand()">Next Hand <span class="kbd">N</span></button>
                 </div>
